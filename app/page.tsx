@@ -13,23 +13,17 @@ import Image from "next/image";
 const product = {
   id: 1,
   name: "متوفر لاي نوع من الانشطة",
-  price: 219,
-  discount: 300,
-  images: [
-    "/images/12.jpg",
-    "/images/13.jpg",
-    "/images/10.jpg",
-    "/images/4.jpg",
-    "/images/5.jpg",
-  ],
+  price: 249,
+  discount: 350,
+  images: ["/images/5.png", "/images/1.png", "/images/3.jpg", "/images/1.jpg"],
   colors: [
     {
-      name: "الاسود بالرمادي",
-      sizes: ["39", "40", "41", "42", "43", "44"],
+      name: "الازرق",
+      sizes: ["40", "41", "42", "43", "44"],
     },
     {
-      name: "الأبيض بالأزرق",
-      sizes: ["39", "43", "44"],
+      name: "البني",
+      sizes: ["40", "41", "42", "43", "44"],
     },
   ],
   availableStock: 50,

@@ -71,10 +71,10 @@ const ProductDiscription = () => {
             </h2>
             <ul className="space-y-4 text-gray-300">
               {[
-                "الخامة: نسيج شبكي يسمح بتهوية القدمين",
+                "الراحة : أناقة وراحة للقدمين طوال اليوم .",
                 "النعل: مطاطي مضاد للانزلاق لثبات أكبر",
                 "اللون: متوفر بالآلوان التي في الصورة",
-                "المقاسات: من 39 إلى 44",
+                "المقاسات: من 40 إلى 44",
               ].map((item, index) => (
                 <motion.li
                   key={index}
@@ -88,14 +88,14 @@ const ProductDiscription = () => {
           </motion.div>
           <motion.div variants={fadeInUp} className="grid grid-cols-2 gap-4">
             <Image
-              src="/images/12.jpg"
+              src="/images/5.png"
               width={300}
               height={300}
               alt="product"
               className="w-full h-auto rounded-lg shadow-xl object-cover relative cursor-pointer transform transition duration-500 hover:scale-105"
             />
             <Image
-              src="/images/13.jpg"
+              src="/images/1.png"
               width={300}
               height={300}
               alt="product detail"
