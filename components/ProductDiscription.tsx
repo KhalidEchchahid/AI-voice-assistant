@@ -86,12 +86,19 @@ const ProductDiscription = () => {
               ))}
             </ul>
           </motion.div>
-          <motion.div variants={fadeInUp} className="grid grid-cols-2 gap-4">
+          <motion.div variants={fadeInUp} className="grid grid-cols-1 gap-4">
             <Image
               src="/images/5.png"
               width={300}
               height={300}
               alt="product"
+              className="w-full h-auto rounded-lg shadow-xl object-cover relative cursor-pointer transform transition duration-500 hover:scale-105"
+            />
+            <Image
+              src="/images/4-4.png"
+              width={300}
+              height={300}
+              alt="product detail"
               className="w-full h-auto rounded-lg shadow-xl object-cover relative cursor-pointer transform transition duration-500 hover:scale-105"
             />
             <Image

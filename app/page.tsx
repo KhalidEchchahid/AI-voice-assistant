@@ -9,14 +9,26 @@ import ProductDiscription from "@/components/ProductDiscription";
 import ReviewsSection from "@/components/ReviewsSection";
 import Footer from "@/components/Footer";
 import Image from "next/image";
+import RelatedProducts from "@/components/relatedProducts";
 
 const product = {
   id: 1,
   name: "متوفر لاي نوع من الانشطة",
   price: 249,
   discount: 350,
-  images: ["/images/5.png", "/images/1.png", "/images/3.jpg", "/images/1.jpg"],
+  images: [
+    "/images/1-1.png",
+    "/images/2-2.png",
+    "/images/4-4.png",
+    "/images/5-5.jpg",
+    "/images/6-6.jpg",
+    "/images/3-3.jpg",
+  ],
   colors: [
+    {
+      name: "الاسود",
+      sizes: ["40", "41", "42", "43", "44"],
+    },
     {
       name: "الازرق",
       sizes: ["40", "41", "42", "43", "44"],
@@ -25,6 +37,7 @@ const product = {
       name: "البني",
       sizes: ["40", "41", "42", "43", "44"],
     },
+   
   ],
   availableStock: 50,
   sku: "KANDRISSI-J001",
@@ -108,6 +121,7 @@ const Page = () => {
           quantity={quantity}
         />
         <ProductDiscription />
+        <RelatedProducts/>
         <ReviewsSection reviews={reviews} />
       </div>
       <Footer />
