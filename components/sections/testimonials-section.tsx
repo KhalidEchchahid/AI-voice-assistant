@@ -23,8 +23,8 @@ export default function TestimonialsSection() {
               <Star className="h-5 w-5 text-amber-400" fill="currentColor" />
             </div>
             <p className="text-gray-300 mb-4">
-              "أفضل ماكينة حلاقة استخدمتها على الإطلاق! التصميم أنيق جداً والأداء ممتاز. أنصح بها بشدة لكل رجل يبحث عن
-              الدقة والجودة."
+              &quot;أفضل ماكينة حلاقة استخدمتها على الإطلاق! التصميم أنيق جداً والأداء ممتاز. أنصح بها بشدة لكل رجل يبحث عن
+              الدقة والجودة.&quot;
             </p>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center">
@@ -45,8 +45,8 @@ export default function TestimonialsSection() {
               <Star className="h-5 w-5 text-amber-400" fill="currentColor" />
             </div>
             <p className="text-gray-300 mb-4">
-              "جهاز رائع بكل المقاييس! يوفر الوقت والجهد بفضل تعدد استخداماته. البطارية تدوم لفترة طويلة والشحن سريع
-              جداً."
+              &quot;جهاز رائع بكل المقاييس! يوفر الوقت والجهد بفضل تعدد استخداماته. البطارية تدوم لفترة طويلة والشحن سريع
+              جداً.&quot;
             </p>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center">
@@ -67,8 +67,8 @@ export default function TestimonialsSection() {
               <Star className="h-5 w-5 text-amber-400" fill="currentColor" />
             </div>
             <p className="text-gray-300 mb-4">
-              "اشتريتها كهدية لزوجي وهو سعيد جداً بها! التصميم فخم والجودة ممتازة. الآن أصبح يهتم بمظهره بشكل أفضل بفضل
-              سهولة استخدامها."
+              &quot;اشتريتها كهدية لزوجي وهو سعيد جداً بها! التصميم فخم والجودة ممتازة. الآن أصبح يهتم بمظهره بشكل أفضل بفضل
+              سهولة استخدامها.&quot;
             </p>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center">
