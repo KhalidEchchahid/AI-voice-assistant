@@ -1,132 +1,50 @@
-"use client";
-import CheckoutForm from "@/components/CheckoutForm";
-import Gallery from "@/components/Gallery";
+import HeroSection from "@/components/sections/hero-section";
+import FeaturesSection from "@/components/sections/features-section";
+import ProductShowcase from "@/components/sections/product-showcase";
+import SpecificationsSection from "@/components/sections/specifications-section";
+import UsageSection from "@/components/sections/usage-section";
+import TestimonialsSection from "@/components/sections/testimonials-section";
+import CTASection from "@/components/sections/cta-section";
+import VideoSection from "@/components/sections/video-section";
 import Navbar from "@/components/Navbar";
-import ProductInfo from "@/components/ProductInfo";
-import { useState } from "react";
-import { motion } from "framer-motion";
-import ProductDiscription from "@/components/ProductDiscription";
-import ReviewsSection from "@/components/ReviewsSection";
+import SiteHeader from "@/components/side-header";
+import CheckoutForm from "@/components/CheckoutForm";
+import WhatsAppButton from "@/components/WhatsAppButton";
 import Footer from "@/components/Footer";
-import Image from "next/image";
-import RelatedProducts from "@/components/relatedProducts";
 
-const product = {
-  id: 1,
-  name: "متوفر لاي نوع من الانشطة",
-  price: 249,
-  discount: 350,
-  images: [
-    "/images/1-1.png",
-    "/images/2-2.png",
-    "/images/4-4.png",
-    "/images/5-5.jpg",
-    "/images/6-6.jpg",
-    "/images/3-3.jpg",
-  ],
-  colors: [
-    {
-      name: "الاسود",
-      sizes: ["40", "41", "42", "43", "44"],
-    },
-    {
-      name: "الازرق",
-      sizes: ["40", "41", "42", "43", "44"],
-    },
-    {
-      name: "البني",
-      sizes: ["40", "41", "42", "43", "44"],
-    },
-   
-  ],
-  availableStock: 50,
-  sku: "KANDRISSI-J001",
-};
-
-const reviews = [
-  { id: 1, rating: 5, text: "وصلتني السبرديلة، داكشي ناضي شكرا أخي👍" },
-  {
-    id: 2,
-    rating: 4,
-    text: " السبرديلة كما شفتها فالصورة، شكرا خويا اللهم بارك ☺️",
-  },
-  {
-    id: 3,
-    rating: 5,
-    text: "صافي أخي راه وصلتني لكموند، إلكان شي جديد خبرني👍",
-  },
-];
-
-const Page = () => {
-  const [selectedColor, setSelectedColor] = useState<string>(
-    product.colors[0].name
-  );
-  const [selectedSize, setSelectedSize] = useState<string>(
-    product.colors[0].sizes[0]
-  );
-  const [quantity, setQuantity] = useState<number>(1);
-
+export default function LandingPage() {
   return (
-    <div className="bg-gradient-to-r from-[#0E1116] to-[#2F343A] text-yellow-500  shadow-md ">
+    <div
+      className="flex min-h-screen flex-col bg-gradient-to-b from-gray-900 to-gray-950 text-white"
+      dir="rtl"
+    >
       <Navbar />
-      {/* Hero Section */}
-      <header className="container mx-auto px-4 pt-6">
-        {/* Logo */}
-        <div className="flex justify-center mb-4">
-          <Image
-            src="/saad-logo.png"
-            alt="Logo"
-            className="h-16 w-auto"
-            height={60}
-            width={60}
-          />
-        </div>
-        <motion.h1
-          initial={{ opacity: 0, y: -50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-4xl md:text-6xl font-bold text-center mb-4"
-        >
-          حذاء رياضي مريح وأنيق
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="text-xl text-center mb-8"
-        >
-          ماركات جديدة من السبرديلة، مميزة وأنيقة !
-        </motion.p>
-      </header>
-      <div className="container mx-auto px-4 py-4">
-        <div className="flex flex-col md:flex-row justify-center items-start gap-8">
-          <Gallery images={product.images} />
-          <ProductInfo
-            title={product.name}
-            colors={product.colors}
-            price={product.price}
-            discount={product.discount}
-            selectedColor={selectedColor}
-            setSelectedColor={setSelectedColor}
-            selectedSize={selectedSize}
-            setSelectedSize={setSelectedSize}
-            quantity={quantity}
-            setQuantity={setQuantity}
-          />
-        </div>
+      <SiteHeader />
+
+      <main className="flex-grow">
+        <HeroSection price="199 درهم" />
         <CheckoutForm
-          price={product.price}
-          selectedColor={selectedColor}
-          selectedSize={selectedSize}
-          quantity={quantity}
+          selectedColor="gold"
+          selectedSize="standard"
+          quantity={1}
+          price={199}
         />
-        <ProductDiscription />
-        <RelatedProducts/>
-        <ReviewsSection reviews={reviews} />
-      </div>
+        <FeaturesSection />
+        <ProductShowcase />
+        <VideoSection videoId="LVjdPxQxceI" />
+        <SpecificationsSection />
+        <UsageSection />
+        <TestimonialsSection />
+        <CTASection price="199 درهم" />
+        <CheckoutForm
+          selectedColor="gold"
+          selectedSize="standard"
+          quantity={1}
+          price={199}
+        />
+      </main>
       <Footer />
+      <WhatsAppButton />
     </div>
   );
-};
-
-export default Page;
+}

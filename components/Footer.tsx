@@ -1,5 +1,4 @@
 import React from "react";
-import { motion } from "framer-motion";
 import { Phone, Facebook } from "lucide-react";
 import Link from "next/link";
 
@@ -24,7 +23,7 @@ const Footer: React.FC = () => {
               تابعنا على مواقع التواصل
             </h3>
             <div className="flex gap-4">
-              <motion.div whileHover={{ scale: 1.2 }} whileTap={{ scale: 0.8 }}>
+              <div >
                 <Link
                   href="https://web.facebook.com/profile.php?id=61568845443903"
                   target="_blank"
@@ -32,7 +31,7 @@ const Footer: React.FC = () => {
                 >
                   <Facebook className="w-6 h-6 " />
                 </Link>
-              </motion.div>
+              </div>
             </div>
           </div>
         </div>
