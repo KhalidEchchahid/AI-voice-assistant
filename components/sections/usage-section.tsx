@@ -15,12 +15,7 @@ export default function UsageSection() {
       <div className="grid md:grid-cols-3 gap-8">
         <div className="bg-gray-800/50 rounded-2xl overflow-hidden hover:bg-gray-800 transition-colors">
           <div className="h-64 relative">
-            <Image
-            src="/images/3.png"
-            alt="تحديد الذقن والحلاقة"
-              fill
-              className="object-cover"
-            />
+            <Image src="/images/3.png" alt="تحديد الذقن والحلاقة" fill className="object-cover" />
           </div>
           <div className="p-6">
             <h3 className="text-xl font-bold mb-2">تحديد الذقن والحلاقة</h3>
@@ -29,12 +24,7 @@ export default function UsageSection() {
         </div>
         <div className="bg-gray-800/50 rounded-2xl overflow-hidden hover:bg-gray-800 transition-colors">
           <div className="h-64 relative">
-            <Image
-            src="/images/4.png"
-            alt="تهذيب الشعر"
-              fill
-              className="object-cover"
-            />
+            <Image src="/images/4.png" alt="تهذيب الشعر" fill className="object-cover" />
           </div>
           <div className="p-6">
             <h3 className="text-xl font-bold mb-2">تهذيب الشعر</h3>
@@ -45,12 +35,7 @@ export default function UsageSection() {
         </div>
         <div className="bg-gray-800/50 rounded-2xl overflow-hidden hover:bg-gray-800 transition-colors">
           <div className="h-64 relative">
-            <Image
-            src="/images/2.png"
-            alt="إزالة شعر الأنف والمناطق الحساسة"
-              fill
-              className="object-cover"
-            />
+            <Image src="/images/2.png" alt="إزالة شعر الأنف والمناطق الحساسة" fill className="object-cover" />
           </div>
           <div className="p-6">
             <h3 className="text-xl font-bold mb-2">إزالة شعر الأنف والمناطق الحساسة</h3>

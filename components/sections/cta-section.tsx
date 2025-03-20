@@ -49,8 +49,8 @@ export default function CTASection({ price }: CTASectionProps) {
           <div className="relative">
             <div className="absolute -inset-4 bg-amber-500/20 rounded-full blur-3xl opacity-30"></div>
             <Image
-            src="/images/6.png"
-            alt="ماكينة الحلاقة الذهبية 3 في 1"
+              src="/images/6.png"
+              alt="ماكينة الحلاقة الذهبية 3 في 1"
               width={500}
               height={500}
               className="relative z-10 mx-auto"

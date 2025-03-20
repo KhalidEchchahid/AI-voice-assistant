@@ -1,4 +1,4 @@
-import Image from "next/image";
+import Image from "next/image"
 
 export default function SpecificationsSection() {
   return (
@@ -9,8 +9,7 @@ export default function SpecificationsSection() {
             <span className="text-amber-400">مواصفات</span> تقنية متطورة
           </h2>
           <p className="text-gray-400 max-w-2xl mx-auto">
-            صُممت ماكينة الحلاقة الذهبية بأحدث التقنيات لضمان أداء متميز وعمر
-            تشغيلي طويل
+            صُممت ماكينة الحلاقة الذهبية بأحدث التقنيات لضمان أداء متميز وعمر تشغيلي طويل
           </p>
         </div>
 
@@ -29,10 +28,7 @@ export default function SpecificationsSection() {
               </div>
               <div>
                 <h3 className="text-xl font-bold mb-2">أسنان حادة</h3>
-                <p className="text-gray-400">
-                  شفرات حادة مصنوعة من الفولاذ المقاوم للصدأ تضمن حلاقة دقيقة
-                  وناعمة
-                </p>
+                <p className="text-gray-400">شفرات حادة مصنوعة من الفولاذ المقاوم للصدأ تضمن حلاقة دقيقة وناعمة</p>
               </div>
             </div>
             <div className="flex gap-4">
@@ -41,9 +37,7 @@ export default function SpecificationsSection() {
               </div>
               <div>
                 <h3 className="text-xl font-bold mb-2">تصميم جسم معدني</h3>
-                <p className="text-gray-400">
-                  هيكل معدني أنيق مقاوم للصدمات يضمن متانة الجهاز وعمراً طويلاً
-                </p>
+                <p className="text-gray-400">هيكل معدني أنيق مقاوم للصدمات يضمن متانة الجهاز وعمراً طويلاً</p>
               </div>
             </div>
             <div className="flex gap-4">
@@ -52,10 +46,7 @@ export default function SpecificationsSection() {
               </div>
               <div>
                 <h3 className="text-xl font-bold mb-2">محرك قوي</h3>
-                <p className="text-gray-400">
-                  محرك عالي الأداء يوفر قوة ثابتة للحلاقة بدون تعثر حتى مع الشعر
-                  الكثيف
-                </p>
+                <p className="text-gray-400">محرك عالي الأداء يوفر قوة ثابتة للحلاقة بدون تعثر حتى مع الشعر الكثيف</p>
               </div>
             </div>
             <div className="flex gap-4">
@@ -64,15 +55,13 @@ export default function SpecificationsSection() {
               </div>
               <div>
                 <h3 className="text-xl font-bold mb-2">شحن Type C</h3>
-                <p className="text-gray-400">
-                  بطارية قابلة للشحن مع منفذ Type C سريع يوفر ساعات طويلة من
-                  الاستخدام
-                </p>
+                <p className="text-gray-400">بطارية قابلة للشحن مع منفذ Type C سريع يوفر ساعات طويلة من الاستخدام</p>
               </div>
             </div>
           </div>
         </div>
       </div>
     </section>
-  );
+  )
 }
+

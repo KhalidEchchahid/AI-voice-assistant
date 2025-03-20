@@ -1,7 +1,7 @@
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { Check } from "lucide-react";
-import Link from "next/link";
+import Image from "next/image"
+import { Button } from "@/components/ui/button"
+import { Check } from "lucide-react"
+import Link from "next/link"
 
 export default function ProductShowcase() {
   return (
@@ -12,8 +12,7 @@ export default function ProductShowcase() {
             <span className="text-amber-400">آلة حلاقة</span> متعددة الوظائف
           </h2>
           <p className="text-gray-300 mb-8 text-lg">
-            تم تصميم ماكينة الحلاقة الذهبية 3 في 1 لتلبية جميع احتياجات العناية
-            الشخصية في ��هاز واحد أنيق وعملي.
+            تم تصميم ماكينة الحلاقة الذهبية 3 في 1 لتلبية جميع احتياجات العناية الشخصية في جهاز واحد أنيق وعملي.
           </p>
           <ul className="space-y-4">
             <li className="flex items-center gap-3">
@@ -52,15 +51,10 @@ export default function ProductShowcase() {
           </Button>
         </div>
         <div className="order-1 md:order-2">
-          <Image
-            src="/images/1.png"
-            alt="آلة حلاقة متعددة الوظائف"
-            width={600}
-            height={600}
-            className="mx-auto"
-          />
+          <Image src="/images/1.png" alt="آلة حلاقة متعددة الوظائف" width={600} height={600} className="mx-auto" />
         </div>
       </div>
     </section>
-  );
+  )
 }
+
