@@ -9,19 +9,19 @@ import Script from "next/script";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  // title: " حذاء أنيق وعصري - مزيج مثالي بين الراحة والأناقة ",
-  // description:
-  //   "هذا الحذاء هو الخيار المثالي للرجل العصري الذي يهتم بالتفاصيل الدقيقة في إطلالاته.",
-  // // icons: {
-  // //   icon: "/images/shoes3.jpg",
-  // // },
-  // openGraph: {
-  //   images: [
-  //     {
-  //       url: "/images/shoes2.jpg",
-  //     },
-  //   ],
+  title: "ماكينة الحلاقة الذهبية 3 في 1",
+  description:
+    "  استمتع بتجربة حلاقة احترافية في منزلك مع ماكينة الحلاقة الذهبية 3 في 1. عرض محدود - خصم 30% + شحن مجاني!",
+  // icons: {
+  //   icon: "/images/shoes3.jpg",
   // },
+  openGraph: {
+    images: [
+      {
+        url: "/images/.png",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({

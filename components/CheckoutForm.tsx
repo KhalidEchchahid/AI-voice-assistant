@@ -92,9 +92,6 @@ const CheckoutForm = ({
         <h1 className="text-3xl font-bold mb-4 text-center text-white">
           للطلب إملأ الخانات أسفله
         </h1>
-        <h2 className="text-xl font-semibold mb-8 text-center text-yellow-400">
-          بعد اختيار اللون والحجم
-        </h2>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {message && (
