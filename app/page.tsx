@@ -29,11 +29,12 @@ export default function LandingPage() {
           quantity={1}
           price={199}
         />
+        <UsageSection />
         <FeaturesSection />
         <ProductShowcase />
         <VideoSection videoId="LVjdPxQxceI" />
         <SpecificationsSection />
-        <UsageSection />
+
         <TestimonialsSection />
         <CTASection price="199 درهم" />
         <CheckoutForm
