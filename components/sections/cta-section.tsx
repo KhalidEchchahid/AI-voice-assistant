@@ -20,8 +20,8 @@ export default function CTASection({ price }: CTASectionProps) {
               استمتع بتجربة حلاقة احترافية في منزلك مع ماكينة الحلاقة الذهبية 3 في 1. عرض محدود - خصم 30% + شحن مجاني!
             </p>
             <div className="text-2xl font-bold mb-6">
-              <span className="text-amber-400">199 درهم </span>
-              <span className="text-gray-400 line-through text-lg mr-2">258.7 درهم</span>
+              <span className="text-amber-400">179 درهم </span>
+              <span className="text-gray-400 line-through text-lg mr-2">240 درهم</span>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
               <Button className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-6 rounded-xl">

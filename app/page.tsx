@@ -22,12 +22,12 @@ export default function LandingPage() {
       <SiteHeader />
 
       <main className="flex-grow">
-        <HeroSection price="199 درهم" />
+        <HeroSection price="179 درهم" />
         <CheckoutForm
           selectedColor="gold"
           selectedSize="standard"
           quantity={1}
-          price={199}
+          price={179}
         />
         <UsageSection />
         <FeaturesSection />
@@ -36,12 +36,12 @@ export default function LandingPage() {
         <SpecificationsSection />
 
         <TestimonialsSection />
-        <CTASection price="199 درهم" />
+        <CTASection price="179 درهم" />
         <CheckoutForm
           selectedColor="gold"
           selectedSize="standard"
           quantity={1}
-          price={199}
+          price={179}
         />
       </main>
       <Footer />

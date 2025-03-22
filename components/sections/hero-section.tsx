@@ -54,8 +54,8 @@ export default function HeroSection({ price }: HeroSectionProps) {
             <span className="text-gray-400">أكثر من 1000 تقييم</span>
           </div>
           <div className="text-2xl font-bold mt-4">
-            <span className="text-amber-400">199 درهم </span>
-            <span className="text-gray-400 line-through text-lg mr-2">258.7 درهم</span>
+            <span className="text-amber-400">179 درهم </span>
+            <span className="text-gray-400 line-through text-lg mr-2">240 درهم</span>
           </div>
         </div>
       </div>
