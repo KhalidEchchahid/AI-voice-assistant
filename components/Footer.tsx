@@ -13,7 +13,7 @@ const Footer: React.FC = () => {
             </h3>
             <div className="space-y-2">
               <p className="flex items-center text-gray-300">
-                <Phone className="mr-2" /> 0690755573
+                <Phone className="mr-2" /> 0620005956
               </p>
               <p className="text-gray-400">توصيل مجاني داخل المغرب!</p>
             </div>
