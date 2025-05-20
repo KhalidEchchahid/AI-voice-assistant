@@ -1,51 +1,11 @@
-import HeroSection from "@/components/sections/hero-section";
-import FeaturesSection from "@/components/sections/features-section";
-import ProductShowcase from "@/components/sections/product-showcase";
-import SpecificationsSection from "@/components/sections/specifications-section";
-import UsageSection from "@/components/sections/usage-section";
-import TestimonialsSection from "@/components/sections/testimonials-section";
-import CTASection from "@/components/sections/cta-section";
-import VideoSection from "@/components/sections/video-section";
-import Navbar from "@/components/Navbar";
-import SiteHeader from "@/components/side-header";
-import CheckoutForm from "@/components/CheckoutForm";
-import WhatsAppButton from "@/components/WhatsAppButton";
-import Footer from "@/components/Footer";
+import VoiceAssistant from "@/components/voice-assistant"
 
-export default function LandingPage() {
+export default function Home() {
   return (
-    <div
-      className="flex min-h-screen flex-col bg-gradient-to-b from-gray-900 to-gray-950 text-white"
-      dir="rtl"
-    >
-      <Navbar />
-      <SiteHeader />
-
-      <main className="flex-grow">
-        <HeroSection price="199 درهم" />
-        <CheckoutForm
-          selectedColor="gold"
-          selectedSize="standard"
-          quantity={1}
-          price={199}
-        />
-        <UsageSection />
-        <FeaturesSection />
-        <ProductShowcase />
-        <VideoSection videoId="LVjdPxQxceI" />
-        <SpecificationsSection />
-
-        <TestimonialsSection />
-        <CTASection price="199 درهم" />
-        <CheckoutForm
-          selectedColor="gold"
-          selectedSize="standard"
-          quantity={1}
-          price={199}
-        />
-      </main>
-      <Footer />
-      <WhatsAppButton />
-    </div>
-  );
+    <main className="flex min-h-screen items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
+      <div className="w-full max-w-[400px] h-[600px] border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-lg">
+        <VoiceAssistant />
+      </div>
+    </main>
+  )
 }
