@@ -17,6 +17,7 @@ import SpeechRecognition from "@/components/speech-recognition"
 import TextToSpeech from "@/components/text-to-speech"
 import LiveKitAudioProcessor from "@/components/livekit-audio-processor"
 import ConversationHandler, { type ConversationState } from "@/components/conversation-handler"
+import ActionCommandHandler from "@/components/action-command-handler"
 import type { Message } from "@/components/transcript-area"
 
 export type AssistantState =
@@ -45,6 +46,7 @@ export default function VoiceAssistant() {
   const [interimTranscript, setInterimTranscript] = useState<string>("")
   const [finalTranscript, setFinalTranscript] = useState<string>("")
   const [sendMessage, setSendMessage] = useState<((message: string) => void) | null>(null)
+  const [isExecutingActions, setIsExecutingActions] = useState<boolean>(false)
 
   // Handle microphone button click
   const handleMicrophoneClick = () => {
@@ -226,6 +228,29 @@ export default function VoiceAssistant() {
     setSendMessage(() => sendMessageFn)
   }, [])
 
+  // Handle action command received
+  const handleActionReceived = useCallback((actionData: any) => {
+    console.log("Voice Assistant: Received action commands:", actionData)
+  }, [])
+
+  // Handle action execution start
+  const handleActionExecuting = useCallback((actionCount: number) => {
+    console.log(`Voice Assistant: Starting execution of ${actionCount} actions`)
+    setIsExecutingActions(true)
+  }, [])
+
+  // Handle action execution complete
+  const handleActionComplete = useCallback(() => {
+    console.log("Voice Assistant: Action execution completed")
+    setIsExecutingActions(false)
+  }, [])
+
+  // Handle action execution error
+  const handleActionError = useCallback((error: string) => {
+    console.error("Voice Assistant: Action execution error:", error)
+    setIsExecutingActions(false)
+  }, [])
+
   // Simulate connection on initial load
   useEffect(() => {
     setState("connecting")
@@ -345,6 +370,17 @@ export default function VoiceAssistant() {
           onResponseReceived={handleResponseFromAgent}
           onError={handleErrorFromAgent}
           onSendMessageReady={handleSendMessageReady}
+        />
+      )}
+
+      {/* Action command handler */}
+      {agentConnected && (
+        <ActionCommandHandler
+          isConnected={agentConnected}
+          onActionReceived={handleActionReceived}
+          onActionExecuting={handleActionExecuting}
+          onActionComplete={handleActionComplete}
+          onError={handleActionError}
         />
       )}
     </div>
