@@ -822,7 +822,7 @@
       },
       sendMessageToIframe: sendMessageToIframe
     }
-
+    // test
     console.log("AI Assistant Loader: Initialization complete")
   }
 
