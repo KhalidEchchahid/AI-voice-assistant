@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AccessToken } from 'livekit-server-sdk'
+import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol'
 
 export async function POST(request: NextRequest) {
   try {
-    const { room, identity, name } = await request.json()
+    const { room, identity, name, agentName } = await request.json()
 
     // Get LiveKit credentials from environment variables
     const apiKey = process.env.LIVEKIT_API_KEY
     const apiSecret = process.env.LIVEKIT_API_SECRET
-    const wsUrl = process.env.LIVEKIT_WS_URL
+    const wsUrl = process.env.LIVEKIT_URL
 
     if (!apiKey || !apiSecret || !wsUrl) {
       console.error('Missing LiveKit environment variables')
@@ -18,20 +19,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create access token
+    // Create access token with proper identity and metadata
+    const userIdentity = identity || `user_${Math.random().toString(36).substr(2, 9)}`
+    const userName = name || 'Voice Assistant User'
+    
     const token = new AccessToken(apiKey, apiSecret, {
-      identity: identity || `user_${Math.random().toString(36).substr(2, 9)}`,
-      name: name || 'Voice Assistant User',
+      identity: userIdentity,
+      name: userName,
+      metadata: JSON.stringify({ user_id: userIdentity }),
     })
 
-    // Grant permissions
+    // Grant permissions (including canUpdateOwnMetadata like playground)
     token.addGrant({
       room: room || 'voice-assistant-room',
       roomJoin: true,
       canPublish: true,
       canSubscribe: true,
       canPublishData: true,
+      canUpdateOwnMetadata: true,
     })
+
+    // Add agent dispatch configuration if agentName provided (like playground)
+    // Note: Commenting out for now to test basic connection without agent dispatch
+    // if (agentName) {
+    //   token.roomConfig = new RoomConfiguration({
+    //     agents: [
+    //       new RoomAgentDispatch({
+    //         agentName: agentName,
+    //         metadata: JSON.stringify({ user_id: userIdentity }),
+    //       }),
+    //     ],
+    //   })
+    // }
 
     // Generate the token
     const jwt = await token.toJwt()

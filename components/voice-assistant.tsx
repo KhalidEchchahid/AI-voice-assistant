@@ -183,8 +183,19 @@ function VoiceAssistantInner({
     return "idle"
   }, [connectionState, voiceAssistant.state])
 
+  // Debug agent connection issues
+  useEffect(() => {
+    console.log("Voice Assistant Debug:", {
+      connectionState,
+      agentConnected: voiceAssistant.agent !== undefined,
+      audioTrackExists: voiceAssistant.audioTrack !== undefined,
+      voiceAssistantState: voiceAssistant.state,
+      currentState,
+    })
+  }, [connectionState, voiceAssistant.agent, voiceAssistant.audioTrack, voiceAssistant.state, currentState])
+
   const isConnected = connectionState === ConnectionState.Connected
-  const isAgentConnected = voiceAssistant.agent !== undefined
+  const isAgentConnected = voiceAssistant.agent !== undefined && voiceAssistant.audioTrack !== undefined
   const isCameraActive = localCameraTrack !== undefined
 
   return (
@@ -297,6 +308,7 @@ export default function VoiceAssistant() {
           room: 'voice-assistant-room',
           identity: `user_${Date.now()}`,
           name: 'Voice Assistant User',
+          // agentName: undefined, // Let LiveKit auto-dispatch any available agent
         }),
       })
 
@@ -510,15 +522,18 @@ export default function VoiceAssistant() {
       onError={(e) => {
         setError(e.message)
         console.error("LiveKit error:", e)
+        // Don't automatically disconnect on error - let user retry
       }}
       onConnected={() => {
         console.log("LiveKit: Successfully connected to room")
         setError(null)
         setHasEverConnected(true)
+        setIsLoading(false) // Clear loading state on successful connection
       }}
-      onDisconnected={() => {
-        console.log("LiveKit: Disconnected from room")
+      onDisconnected={(reason) => {
+        console.log("LiveKit: Disconnected from room", reason)
         setShouldConnect(false)
+        setIsLoading(false) // Clear loading state on disconnect
       }}
     >
       <div className="flex-1 flex flex-col min-h-0 relative">
