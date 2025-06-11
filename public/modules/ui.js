@@ -3,7 +3,7 @@
   // Initialize the module
   window.AIAssistantModules = window.AIAssistantModules || {}
 
-  // Add the UI module
+  // Add the UI module for the AI Assistant
   window.AIAssistantModules.ui = {
     // State
     elements: {
