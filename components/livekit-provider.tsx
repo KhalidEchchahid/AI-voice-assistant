@@ -41,32 +41,35 @@ interface LiveKitProviderProps {
 
 export function LiveKitProvider({ children }: LiveKitProviderProps) {
   const [room] = useState(() => {
-    // Configure room with options similar to LiveKit Agents Playground
+    // Configure room with options optimized for voice agents
     const roomOptions: RoomOptions = {
+      // Enable adaptive streaming for better performance
       adaptiveStream: true,
       dynacast: true,
+      
+      // Auto-subscribe to all tracks by default
+      autoSubscribe: true,
+      
+      // Enable auto-manage subscriptions
+      autoManageVideo: true,
+      
+      // Publish defaults optimized for voice
       publishDefaults: {
-        simulcast: true,
-        videoSimulcastLayers: [
-          {
-            width: 1280,
-            height: 720,
-            resolution: { width: 1280, height: 720 },
-            encoding: { maxBitrate: 1500000, maxFramerate: 30 },
-          },
-          {
-            width: 640,
-            height: 360,
-            resolution: { width: 640, height: 360 },
-            encoding: { maxBitrate: 500_000, maxFramerate: 30 },
-          },
-          {
-            width: 320,
-            height: 180,
-            resolution: { width: 320, height: 180 },
-            encoding: { maxBitrate: 150_000, maxFramerate: 15 },
-          },
-        ],
+        audioPreset: {
+          maxBitrate: 20_000, // Lower bitrate for voice
+          priority: 'high',
+        },
+        dtx: false, // Disable discontinuous transmission for better voice quality
+        red: true,  // Enable redundancy for audio
+        simulcast: false, // Not needed for audio
+      },
+      
+      // Connection quality and reconnection settings
+      disconnectOnPageLeave: true,
+      reconnectPolicy: {
+        maxAttempts: 3,
+        backoffFactor: 1.5,
+        maxDelay: 60_000,
       },
     }
 
@@ -79,29 +82,41 @@ export function LiveKitProvider({ children }: LiveKitProviderProps) {
 
   useEffect(() => {
     const handleConnectionStateChanged = (state: ConnectionState) => {
-      console.log("Connection state changed:", state)
+      console.log("LiveKit connection state changed:", state)
       setConnectionState(state)
-      // Only update isConnected if it's different from the current value
+      
+      // Update isConnected based on connection state
       const newIsConnected = state === ConnectionState.Connected
       if (isConnected !== newIsConnected) {
         setIsConnected(newIsConnected)
+        
+        if (newIsConnected) {
+          console.log("LiveKit: Successfully connected to room")
+          setError(null)
+        }
       }
     }
 
     const handleParticipantConnected = (participant: RemoteParticipant) => {
       console.log("Participant connected:", participant.identity)
-      // Create a new Map to trigger a single update
+      
+      // Update remote participants map
       setRemoteParticipants(new Map(room.remoteParticipants))
 
-      // Subscribe to all tracks
+      // Set up participant-level event listeners
       participant.on(RoomEvent.TrackSubscribed, (track, publication) => {
         console.log(`Subscribed to ${track.kind} track from ${participant.identity}`)
+        // Note: Audio playback is handled by LiveKitAudioManager
+      })
+
+      participant.on(RoomEvent.TrackUnsubscribed, (track) => {
+        console.log(`Unsubscribed from ${track.kind} track`)
+        // Note: Audio cleanup is handled by LiveKitAudioManager
       })
     }
 
     const handleParticipantDisconnected = (participant: RemoteParticipant) => {
       console.log("Participant disconnected:", participant.identity)
-      // Create a new Map to trigger a single update
       setRemoteParticipants(new Map(room.remoteParticipants))
     }
 
@@ -111,6 +126,23 @@ export function LiveKitProvider({ children }: LiveKitProviderProps) {
         setIsConnected(false)
       }
       setConnectionState(ConnectionState.Disconnected)
+      setRemoteParticipants(new Map())
+      
+      // Clear any connection errors when intentionally disconnected
+      if (reason === 'CLIENT_INITIATED') {
+        setError(null)
+      }
+    }
+
+    const handleReconnecting = () => {
+      console.log("Reconnecting to LiveKit room...")
+      setError(null)
+    }
+
+    const handleReconnected = () => {
+      console.log("Successfully reconnected to LiveKit room")
+      setError(null)
+      setRemoteParticipants(new Map(room.remoteParticipants))
     }
 
     const handleTrackSubscribed = (
@@ -119,11 +151,7 @@ export function LiveKitProvider({ children }: LiveKitProviderProps) {
       participant: RemoteParticipant,
     ) => {
       console.log("Track subscribed:", track.kind, "from", participant.identity)
-
-      // Automatically attach audio tracks
-      if (track.kind === Track.Kind.Audio) {
-        track.attach()
-      }
+      // Note: Audio track handling is managed by LiveKitAudioManager
     }
 
     const handleTrackUnsubscribed = (
@@ -132,11 +160,19 @@ export function LiveKitProvider({ children }: LiveKitProviderProps) {
       participant: RemoteParticipant,
     ) => {
       console.log("Track unsubscribed:", track.kind, "from", participant.identity)
+      // Note: Audio track cleanup is managed by LiveKitAudioManager
+    }
 
-      // Detach audio tracks
-      if (track.kind === Track.Kind.Audio) {
-        track.detach()
-      }
+    const handleTrackStreamStateChanged = (
+      publication: RemoteTrackPublication,
+      streamState: Track.StreamState,
+      participant: RemoteParticipant
+    ) => {
+      console.log(`Track ${publication.trackSid} stream state: ${streamState}`)
+    }
+
+    const handleConnectionQualityChanged = (quality: any, participant: any) => {
+      console.log(`Connection quality for ${participant?.identity || 'local'}: ${quality}`)
     }
 
     // Set up event listeners
@@ -144,8 +180,12 @@ export function LiveKitProvider({ children }: LiveKitProviderProps) {
     room.on(RoomEvent.ParticipantConnected, handleParticipantConnected)
     room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected)
     room.on(RoomEvent.Disconnected, handleDisconnected)
+    room.on(RoomEvent.Reconnecting, handleReconnecting)
+    room.on(RoomEvent.Reconnected, handleReconnected)
     room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed)
     room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed)
+    room.on(RoomEvent.TrackStreamStateChanged, handleTrackStreamStateChanged)
+    room.on(RoomEvent.ConnectionQualityChanged, handleConnectionQualityChanged)
 
     // Clean up event listeners
     return () => {
@@ -153,8 +193,12 @@ export function LiveKitProvider({ children }: LiveKitProviderProps) {
       room.off(RoomEvent.ParticipantConnected, handleParticipantConnected)
       room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected)
       room.off(RoomEvent.Disconnected, handleDisconnected)
+      room.off(RoomEvent.Reconnecting, handleReconnecting)
+      room.off(RoomEvent.Reconnected, handleReconnected)
       room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed)
       room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed)
+      room.off(RoomEvent.TrackStreamStateChanged, handleTrackStreamStateChanged)
+      room.off(RoomEvent.ConnectionQualityChanged, handleConnectionQualityChanged)
     }
   }, [room, isConnected])
 
@@ -170,46 +214,62 @@ export function LiveKitProvider({ children }: LiveKitProviderProps) {
   const connect = async (url: string, token: string, isLocalDev = false) => {
     try {
       setError(null)
+      console.log("Connecting to LiveKit room...", { url, isLocalDev })
 
       if (isLocalDev) {
-        // For local development, we'll use a simpler connection approach
+        // For local development, connect without token
         console.log("Connecting in local development mode")
 
-        // Generate a random identity for local development
-        const localIdentity = `local-user-${Math.floor(Math.random() * 10000)}`
+        await room.connect(url, "", { 
+          autoSubscribe: true,
+          publishDefaults: {
+            audioPreset: {
+              maxBitrate: 20_000,
+              priority: 'high',
+            },
+          },
+        })
 
-        // Connect without a token in local development mode
-        // This assumes your local LiveKit server is configured to allow connections without tokens
-        await room.connect(url, "", { autoSubscribe: true })
-
-        // Set local participant name
+        // Set local participant name for local dev
         if (room.localParticipant) {
           room.localParticipant.setName(`LocalUser-${Math.floor(Math.random() * 1000)}`)
         }
 
         console.log("Connected to LiveKit room in local development mode")
       } else {
-        // Normal connection with token for production
+        // Production connection with token
         await room.connect(url, token, {
           autoSubscribe: true,
+          publishDefaults: {
+            audioPreset: {
+              maxBitrate: 20_000,
+              priority: 'high',
+            },
+          },
         })
-        console.log("Connected to LiveKit room")
+        console.log("Connected to LiveKit room with token")
       }
 
-      // Only set if not already connected
+      // Update state and participants
       if (!isConnected) {
         setIsConnected(true)
       }
       setRemoteParticipants(new Map(room.remoteParticipants))
+      
     } catch (err) {
       console.error("Failed to connect to LiveKit room:", err)
-      setError(err instanceof Error ? err : new Error(String(err)))
+      const error = err instanceof Error ? err : new Error(String(err))
+      setError(error)
+      throw error
     }
   }
 
   const disconnect = () => {
+    console.log("Disconnecting from LiveKit room")
     room.disconnect()
     setIsConnected(false)
+    setRemoteParticipants(new Map())
+    setError(null)
   }
 
   const value = {

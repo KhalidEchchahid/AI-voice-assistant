@@ -28,9 +28,9 @@ export default function ActionCommandHandler({
       // Create message for helper script
       const message = {
         action: "execute_actions",
-        payload: actionData.actions,
+        payload: actionData.actions || actionData.commands,
         type: "execute_actions",
-        actions: actionData.actions,
+        actions: actionData.actions || actionData.commands,
         metadata: {
           website_id: actionData.website_id,
           user_intent: actionData.user_intent,
@@ -58,7 +58,7 @@ export default function ActionCommandHandler({
   // Show visual feedback for action execution
   const showActionExecutionFeedback = useCallback((actionData: any) => {
     try {
-      const actionCount = actionData.actions ? actionData.actions.length : 0
+      const actionCount = actionData.actions ? actionData.actions.length : actionData.commands ? actionData.commands.length : 0
       const userIntent = actionData.user_intent || "action"
       
       console.log(`Voice Widget: Executing ${actionCount} actions for: ${userIntent}`)
@@ -76,54 +76,34 @@ export default function ActionCommandHandler({
         }, 2000)
       }
 
-      // Optional: Display action count in widget
-      const statusElement = document.querySelector('.action-status')
-      if (statusElement) {
-        statusElement.textContent = `Executing ${actionCount} action${actionCount !== 1 ? 's' : ''}...`
-        setTimeout(() => {
-          statusElement.textContent = ''
-        }, 3000)
-      }
-
     } catch (error) {
       console.error("Voice Widget: Error showing action feedback:", error)
       setIsExecutingActions(false)
     }
   }, [onActionExecuting, onActionComplete])
 
-  // Handle incoming data messages from the backend agent
+  // Handle incoming data messages from the backend agent - ONLY ACTION MESSAGES
   useEffect(() => {
     if (!room || !isConnected) return
 
     const handleDataReceived = (payload: Uint8Array, participant?: any, kind?: DataPacket_Kind, topic?: string) => {
       try {
-        console.log("Voice Widget: Received data message from backend:", {
-          participant: participant?.identity,
-          dataSize: payload.length,
-          kind: kind,
-          topic: topic
-        })
-
         // Convert the binary data to a string
         const decoder = new TextDecoder('utf-8')
         const dataString = decoder.decode(payload)
-
-        console.log("Voice Widget: Decoded data string:", dataString)
 
         // Parse the JSON data
         let actionData
         try {
           actionData = JSON.parse(dataString)
         } catch (parseError) {
-          console.warn("Voice Widget: Failed to parse data as JSON:", parseError)
+          // Not JSON or not for us, ignore silently
           return
         }
 
-        console.log("Voice Widget: Parsed action data:", actionData)
-
-        // Check if this is an action command payload
+        // ONLY handle action command messages - let ConversationHandler handle everything else
         if (actionData && actionData.type === "execute_actions") {
-          console.log("Voice Widget: Received action commands, forwarding to helper script")
+          console.log("ActionCommandHandler: Processing action commands:", actionData)
           
           onActionReceived?.(actionData)
           
@@ -134,11 +114,12 @@ export default function ActionCommandHandler({
           showActionExecutionFeedback(actionData)
           
         } else {
-          console.log("Voice Widget: Data message is not an action command, ignoring")
+          // NOT an action command - ignore and let ConversationHandler process it
+          return
         }
 
       } catch (error) {
-        console.error("Voice Widget: Error processing data message:", error)
+        console.error("ActionCommandHandler: Error processing data message:", error)
         onError?.("Failed to process action command from backend")
       }
     }
@@ -146,7 +127,7 @@ export default function ActionCommandHandler({
     // Set up the data message listener
     room.on("dataReceived", handleDataReceived)
 
-    console.log("Voice Widget: Action command bridge initialized - listening for backend data messages")
+    console.log("ActionCommandHandler: Action command bridge initialized - listening ONLY for action commands")
 
     return () => {
       room.off("dataReceived", handleDataReceived)
@@ -189,6 +170,7 @@ export default function ActionCommandHandler({
           color: white;
           padding: 8px 12px;
           border-radius: 6px;
+          
           font-size: 12px;
           z-index: 10001;
           transition: opacity 0.3s ease;

@@ -1,5 +1,5 @@
-import AssistantToggle from "@/components/assistant-toggle";
 import VoiceAssistant from "@/components/voice-assistant";
+import { LiveKitRoom } from "@livekit/components-react";
 
 export default function Home() {
   return (

@@ -65,7 +65,7 @@ export default function AudioVisualizer({ active, className }: AudioVisualizerPr
 
       // Smooth transition to target heights
       for (let i = 0; i < bars; i++) {
-        barHeights[i] += (targetHeights[i] - barHeights[i]) * 0.2
+        barHeights[i] += (targetHeights[i] - barHeights[i]) * 0.05
       }
 
       // Draw bars

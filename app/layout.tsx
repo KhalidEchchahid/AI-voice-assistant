@@ -25,6 +25,8 @@ export default function RootLayout({
             {children}
           </ThemeProvider>
         </LiveKitProvider>
+
+        
       </body>
     </html>
   )

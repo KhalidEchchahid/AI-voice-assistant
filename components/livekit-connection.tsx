@@ -14,8 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Wifi, WifiOff } from "lucide-react"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Loader2, Wifi, WifiOff, Settings } from "lucide-react"
 
 interface LiveKitConnectionProps {
   onConnectionChange: (connected: boolean) => void
@@ -24,36 +23,60 @@ interface LiveKitConnectionProps {
 export default function LiveKitConnection({ onConnectionChange }: LiveKitConnectionProps) {
   const { connect, disconnect, isConnected, connectionState, error } = useLiveKit()
   const [showDialog, setShowDialog] = useState(false)
-  const [url, setUrl] = useState("")
-  const [token, setToken] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [isLocalDev, setIsLocalDev] = useState(false)
+  const [roomName, setRoomName] = useState("voice-assistant-room")
+  const [userName, setUserName] = useState("")
 
-  useEffect(() => {
-    // Only call the callback when the connection state actually changes
-    onConnectionChange(isConnected)
-  }, [isConnected, onConnectionChange])
-
-  // Set default localhost URL when local dev mode is enabled
-  useEffect(() => {
-    if (isLocalDev && !url) {
-      setUrl("ws://localhost:7880")
-    }
-  }, [isLocalDev, url])
-
-  const handleConnect = async () => {
-    if (!url) return
-    if (!isLocalDev && !token) return
-
-    setIsLoading(true)
+  // Generate token and connect
+  const generateTokenAndConnect = async (room?: string, identity?: string, name?: string) => {
     try {
-      await connect(url, token, isLocalDev)
+      setIsLoading(true)
+      console.log("Generating LiveKit token...")
+
+      const response = await fetch('/api/livekit-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          room: room || roomName,
+          identity: identity || `user_${Date.now()}`,
+          name: name || userName || 'Voice Assistant User',
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+      }
+
+      const { token, wsUrl, room: actualRoom, identity: actualIdentity } = await response.json()
+
+      console.log("Token generated successfully, connecting to:", { wsUrl, actualRoom, actualIdentity })
+
+      // Connect using the generated token
+      await connect(wsUrl, token, false)
+      
+      console.log("Successfully connected to LiveKit!")
       setShowDialog(false)
+
     } catch (err) {
-      console.error("Connection error:", err)
+      console.error("Failed to generate token or connect:", err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
+      
+      // Show error to user
+      alert(`Connection failed: ${errorMessage}. Please check your environment variables.`)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  useEffect(() => {
+    onConnectionChange(isConnected)
+  }, [isConnected, onConnectionChange])
+
+  const handleManualConnect = async () => {
+    await generateTokenAndConnect(roomName, undefined, userName)
   }
 
   const handleDisconnect = () => {
@@ -77,7 +100,7 @@ export default function LiveKitConnection({ onConnectionChange }: LiveKitConnect
   const getConnectionStatusText = () => {
     switch (connectionState) {
       case ConnectionState.Connected:
-        return isLocalDev ? "Connected to local agent" : "Connected to agent"
+        return "Connected to agent"
       case ConnectionState.Connecting:
         return "Connecting to agent..."
       case ConnectionState.Reconnecting:
@@ -92,7 +115,7 @@ export default function LiveKitConnection({ onConnectionChange }: LiveKitConnect
     <>
       <div className="flex items-center space-x-2">
         <div className={`w-2 h-2 rounded-full ${getConnectionStatusColor()}`}></div>
-        <span className="text-xs text-gray-500 dark:text-gray-400">{getConnectionStatusText()}</span>
+        <span className="text-xs text-gray-400">{getConnectionStatusText()}</span>
 
         {isConnected ? (
           <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleDisconnect}>
@@ -101,8 +124,8 @@ export default function LiveKitConnection({ onConnectionChange }: LiveKitConnect
           </Button>
         ) : (
           <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setShowDialog(true)}>
-            <Wifi className="h-3.5 w-3.5 mr-1" />
-            <span className="text-xs">Connect</span>
+            <Settings className="h-3.5 w-3.5 mr-1" />
+            <span className="text-xs">Settings</span>
           </Button>
         )}
       </div>
@@ -110,60 +133,45 @@ export default function LiveKitConnection({ onConnectionChange }: LiveKitConnect
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Connect to Agent</DialogTitle>
+            <DialogTitle>LiveKit Connection Settings</DialogTitle>
             <DialogDescription>
-              Enter your LiveKit server URL and token to connect to your agent, or use local development mode.
+              Configure connection to your LiveKit agent. Tokens are generated automatically.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="local-dev"
-                checked={isLocalDev}
-                onCheckedChange={(checked) => setIsLocalDev(checked === true)}
-              />
-              <Label
-                htmlFor="local-dev"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Local Development Mode
-              </Label>
-            </div>
-
-            {isLocalDev && (
-              <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-md">
-                Local mode connects to a LiveKit server running on your machine without requiring a token. Make sure
-                your LiveKit server is running locally.
-              </div>
-            )}
-
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="livekit-url" className="text-right">
-                URL
+              <Label htmlFor="room-name" className="text-right">
+                Room
               </Label>
               <Input
-                id="livekit-url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder={isLocalDev ? "ws://localhost:7880" : "wss://your-livekit-server.com"}
+                id="room-name"
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                placeholder="voice-assistant-room"
                 className="col-span-3"
               />
             </div>
 
-            {!isLocalDev && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="livekit-token" className="text-right">
-                  Token
-                </Label>
-                <Input
-                  id="livekit-token"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder="Your LiveKit token"
-                  className="col-span-3"
-                />
-              </div>
-            )}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="user-name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="user-name"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                placeholder="Voice Assistant User"
+                className="col-span-3"
+              />
+            </div>
+
+            <div className="text-sm text-blue-400 bg-blue-900/20 p-2 rounded-md">
+              <strong>Environment Setup Required:</strong><br/>
+              Make sure you have set these environment variables:<br/>
+              • <code>LIVEKIT_API_KEY</code><br/>
+              • <code>LIVEKIT_API_SECRET</code><br/>
+              • <code>LIVEKIT_WS_URL</code>
+            </div>
 
             {error && <div className="text-sm text-red-500 mt-2">Error: {error.message}</div>}
           </div>
@@ -171,14 +179,14 @@ export default function LiveKitConnection({ onConnectionChange }: LiveKitConnect
             <Button variant="outline" onClick={() => setShowDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleConnect} disabled={!url || (!isLocalDev && !token) || isLoading}>
+            <Button onClick={handleManualConnect} disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Connecting
                 </>
               ) : (
-                "Connect"
+                "Connect Now"
               )}
             </Button>
           </DialogFooter>
