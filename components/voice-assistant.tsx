@@ -218,7 +218,12 @@ function VoiceAssistantInner({
           />
 
           {/* Visual Feedback */}
-          {(currentState === "speaking" || currentState === "listening") && <VisualFeedback />}
+          {(currentState === "speaking" || currentState === "listening") && (
+            <VisualFeedback 
+              trackRef={voiceAssistant.audioTrack}
+              state={voiceAssistant.state}
+            />
+          )}
 
           {/* Connection indicators */}
           {isConnected && (
