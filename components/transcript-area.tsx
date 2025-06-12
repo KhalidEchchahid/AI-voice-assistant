@@ -63,9 +63,9 @@ export default function TranscriptArea({ messages }: TranscriptAreaProps) {
         style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 #1f2937' }}
       >
         {messages.map((message, index) => (
-          <div
-            key={message.id}
-            className={cn(
+        <div
+          key={message.id}
+          className={cn(
               "flex items-start space-x-3",
               message.role === "user" ? "flex-row-reverse space-x-reverse" : ""
             )}
@@ -93,8 +93,8 @@ export default function TranscriptArea({ messages }: TranscriptAreaProps) {
                 message.role === "user"
                   ? "bg-green-600 text-white rounded-tr-md"
                   : "bg-gray-800 text-gray-100 rounded-tl-md border border-gray-700"
-              )}
-            >
+          )}
+        >
               {/* Message content */}
               <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                 {message.content}
@@ -113,9 +113,9 @@ export default function TranscriptArea({ messages }: TranscriptAreaProps) {
                 }
               </div>
             </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
+        </div>
+      ))}
+      <div ref={messagesEndRef} />
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRoomContext } from "@livekit/components-react"
 
 /**
@@ -13,6 +13,9 @@ import { useRoomContext } from "@livekit/components-react"
 export default function ActionCommandHandler() {
   // Grab the current LiveKit Room instance from React context
   const room = useRoomContext()
+
+  // Debug state: last received data message (parsed JSON)
+  const [lastAgentMessage, setLastAgentMessage] = useState<any>(null)
 
   useEffect(() => {
     if (!room) return
@@ -33,6 +36,7 @@ export default function ActionCommandHandler() {
 
         // Try to parse the JSON payload
         const data = JSON.parse(jsonString)
+        setLastAgentMessage(data)
         console.log("ActionCommandHandler: received data message", data)
 
         // Always forward the raw data so the helper can decide what to do with it
@@ -63,6 +67,7 @@ export default function ActionCommandHandler() {
         // Forward the generic data message (helps with debugging / other message types)
         window.parent.postMessage(baseMessage, "*")
       } catch (err) {
+        setLastAgentMessage({ error: String(err) })
         console.error("ActionCommandHandler: failed to process data message", err)
       }
     }
@@ -76,5 +81,35 @@ export default function ActionCommandHandler() {
     }
   }, [room])
 
-  return null
+  // Debug UI: Only show in development
+  const isDev = typeof process !== 'undefined' && process.env.NODE_ENV !== 'production'
+
+  return (
+    <>
+      {isDev && lastAgentMessage && (
+        <div style={{
+          position: 'fixed',
+          bottom: 0,
+          right: 0,
+          zIndex: 99999,
+          background: 'rgba(30,30,30,0.95)',
+          color: '#fff',
+          fontSize: 12,
+          maxWidth: 400,
+          maxHeight: 300,
+          overflow: 'auto',
+          border: '1px solid #333',
+          borderRadius: 8,
+          padding: 12,
+          margin: 12,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Agent Action Debug</div>
+          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>
+            {JSON.stringify(lastAgentMessage, null, 2)}
+          </pre>
+        </div>
+      )}
+    </>
+  )
 } 
