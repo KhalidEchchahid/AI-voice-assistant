@@ -37,7 +37,6 @@ export default function ActionCommandHandler() {
         // Try to parse the JSON payload
         const data = JSON.parse(jsonString)
         setLastAgentMessage(data)
-        console.log("ActionCommandHandler: received data message", data)
 
         // Always forward the raw data so the helper can decide what to do with it
         const baseMessage = {
@@ -47,6 +46,7 @@ export default function ActionCommandHandler() {
 
         // If this looks like an execute_actions command, send the dedicated message as well
         if (data && data.type === "execute_actions" && Array.isArray(data.actions)) {
+          console.log("ActionCommandHandler: posting execute_actions to parent", data)
           window.parent.postMessage(
             {
               action: "execute_actions",
@@ -68,7 +68,6 @@ export default function ActionCommandHandler() {
         window.parent.postMessage(baseMessage, "*")
       } catch (err) {
         setLastAgentMessage({ error: String(err) })
-        console.error("ActionCommandHandler: failed to process data message", err)
       }
     }
 
