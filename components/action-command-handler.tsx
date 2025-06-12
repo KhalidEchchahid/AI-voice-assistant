@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRoomContext } from "@livekit/components-react"
+import { RoomEvent, ConnectionState } from "livekit-client"
 
 /**
  * ActionCommandHandler listens for data messages coming from the backend (via LiveKit data channel)
@@ -11,104 +12,249 @@ import { useRoomContext } from "@livekit/components-react"
  * context is available (useRoom()). It returns null because it only deals with side-effects.
  */
 export default function ActionCommandHandler() {
-  // Grab the current LiveKit Room instance from React context
   const room = useRoomContext()
+  
+  // Debug states
+  const [roomState, setRoomState] = useState<{
+    connected: boolean
+    connectionState: ConnectionState | null
+    participantCount: number
+  }>({ connected: false, connectionState: null, participantCount: 0 })
+  
+  const [lastDataMessage, setLastDataMessage] = useState<any>(null)
+  const [lastActionMessage, setLastActionMessage] = useState<any>(null)
+  const [messageCount, setMessageCount] = useState(0)
+  const [errors, setErrors] = useState<string[]>([])
 
-  // Debug state: last received data message (parsed JSON)
-  const [lastAgentMessage, setLastAgentMessage] = useState<any>(null)
+  const addError = (error: string) => {
+    console.error("ActionCommandHandler Error:", error)
+    setErrors(prev => [...prev.slice(-4), error]) // Keep last 5 errors
+  }
 
   useEffect(() => {
-    if (!room) return
+    if (!room) {
+      console.log("ActionCommandHandler: Room not available yet")
+      return
+    }
 
-    /**
-     * Handler fired for every data message that arrives over the LiveKit data channel.
-     * We expect the backend to send UTF-8 encoded JSON strings describing actions.
-     */
-    function handleData(
+    console.log("ActionCommandHandler: Room available, setting up listeners")
+    console.log("ActionCommandHandler: Room state:", {
+      name: room.name,
+      state: room.state,
+      isConnected: room.state === ConnectionState.Connected,
+      localParticipant: room.localParticipant?.identity,
+      remoteParticipants: Array.from(room.remoteParticipants.keys())
+    })
+
+    // Update room state for debug UI
+    const updateRoomState = () => {
+      setRoomState({
+        connected: room.state === ConnectionState.Connected,
+        connectionState: room.state,
+        participantCount: room.remoteParticipants.size + 1 // +1 for local
+      })
+    }
+
+    updateRoomState()
+
+    // Listen for connection state changes
+    const handleConnectionStateChanged = (state: ConnectionState) => {
+      console.log("ActionCommandHandler: Connection state changed to:", state)
+      updateRoomState()
+    }
+
+    // Listen for ALL data messages (not just execute_actions)
+    const handleDataReceived = (
       payload: Uint8Array,
-      _participant: any,
-      _kind: any,
-      _topic?: string,
-    ) {
+      participant?: any,
+      kind?: any,
+      topic?: string
+    ) => {
       try {
-        const decoder = new TextDecoder("utf-8")
-        const jsonString = decoder.decode(payload)
+        console.log("ActionCommandHandler: Raw data received:", {
+          payloadLength: payload.length,
+          participant: participant?.identity,
+          kind,
+          topic,
+          timestamp: new Date().toISOString()
+        })
 
-        // Try to parse the JSON payload
-        const data = JSON.parse(jsonString)
-        setLastAgentMessage(data)
+        setMessageCount(prev => prev + 1)
 
-        // Always forward the raw data so the helper can decide what to do with it
-        const baseMessage = {
-          action: "livekit_data_received",
-          data: jsonString,
+        // Decode the payload
+        const textDecoder = new TextDecoder()
+        const decodedText = textDecoder.decode(payload)
+        console.log("ActionCommandHandler: Decoded text:", decodedText)
+
+        // Try to parse as JSON
+        let parsedData: any
+        try {
+          parsedData = JSON.parse(decodedText)
+          console.log("ActionCommandHandler: Parsed JSON data:", parsedData)
+        } catch (parseError) {
+          console.log("ActionCommandHandler: Not JSON data, treating as plain text:", decodedText)
+          parsedData = { 
+            type: "text", 
+            content: decodedText,
+            topic,
+            from: participant?.identity 
+          }
         }
 
-        // If this looks like an execute_actions command, send the dedicated message as well
-        if (data && data.type === "execute_actions" && Array.isArray(data.actions)) {
-          console.log("ActionCommandHandler: posting execute_actions to parent", data)
-          window.parent.postMessage(
-            {
-              action: "execute_actions",
-              payload: data.actions,
-              type: "execute_actions",
-              actions: data.actions,
-              metadata: {
-                website_id: data.website_id,
-                user_intent: data.user_intent,
-                timestamp: new Date().toISOString(),
-                source: "voice_assistant_backend",
-              },
+        // Update debug state with last received message
+        setLastDataMessage({
+          ...parsedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            from: participant?.identity,
+            topic,
+            kind,
+            payloadSize: payload.length
+          }
+        })
+
+        // Check if this is an execute_actions message
+        if (parsedData && parsedData.type === "execute_actions" && Array.isArray(parsedData.actions)) {
+          console.log("ActionCommandHandler: Execute actions message received:", parsedData)
+          
+          setLastActionMessage(parsedData)
+
+          // Post message to parent window
+          const messageToParent = {
+            action: "execute_actions",
+            payload: parsedData.actions,
+            type: "execute_actions",
+            actions: parsedData.actions,
+            metadata: {
+              website_id: parsedData.website_id,
+              user_intent: parsedData.user_intent,
+              timestamp: new Date().toISOString(),
+              source: "voice_assistant_backend",
             },
-            "*",
-          )
+          }
+
+          console.log("ActionCommandHandler: Posting message to parent:", messageToParent)
+          window.parent.postMessage(messageToParent, "*")
+        } else {
+          console.log("ActionCommandHandler: Non-action message received:", {
+            type: parsedData?.type,
+            hasActions: Array.isArray(parsedData?.actions),
+            actionCount: parsedData?.actions?.length
+          })
         }
 
-        // Forward the generic data message (helps with debugging / other message types)
-        window.parent.postMessage(baseMessage, "*")
-      } catch (err) {
-        setLastAgentMessage({ error: String(err) })
+      } catch (error) {
+        const errorMsg = `Failed to process data message: ${error}`
+        addError(errorMsg)
+        console.error("ActionCommandHandler: Error processing data:", error, {
+          payloadLength: payload.length,
+          participant: participant?.identity,
+          topic
+        })
       }
     }
 
-    // Attach listener
-    room.on("dataReceived", handleData)
+    // Attach event listeners
+    room.on(RoomEvent.DataReceived, handleDataReceived)
+    room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged)
 
-    // Cleanup listener on unmount
+    console.log("ActionCommandHandler: Event listeners attached")
+
+    // Cleanup function
     return () => {
-      room.off("dataReceived", handleData)
+      console.log("ActionCommandHandler: Cleaning up event listeners")
+      room.off(RoomEvent.DataReceived, handleDataReceived)
+      room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged)
     }
   }, [room])
 
-  // Debug UI: Only show in development
-  const isDev = typeof process !== 'undefined' && process.env.NODE_ENV !== 'production'
+  // Only show debug UI in development
+  if (process.env.NODE_ENV === 'production') {
+    return null
+  }
 
   return (
-    <>
-      {isDev && lastAgentMessage && (
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          right: 0,
-          zIndex: 99999,
-          background: 'rgba(30,30,30,0.95)',
-          color: '#fff',
-          fontSize: 12,
-          maxWidth: 400,
-          maxHeight: 300,
-          overflow: 'auto',
-          border: '1px solid #333',
-          borderRadius: 8,
-          padding: 12,
-          margin: 12,
-          boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
-        }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Agent Action Debug</div>
-          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>
-            {JSON.stringify(lastAgentMessage, null, 2)}
-          </pre>
+    <div style={{
+      position: 'fixed',
+      bottom: '10px',
+      right: '10px',
+      background: 'rgba(0, 0, 0, 0.9)',
+      color: 'white',
+      padding: '15px',
+      borderRadius: '8px',
+      fontSize: '12px',
+      maxWidth: '400px',
+      maxHeight: '500px',
+      overflow: 'auto',
+      zIndex: 9999,
+      fontFamily: 'monospace'
+    }}>
+      <div style={{ fontWeight: 'bold', marginBottom: '10px', color: '#4CAF50' }}>
+        🐛 LiveKit Data Debug
+      </div>
+      
+      <div style={{ marginBottom: '10px' }}>
+        <strong>Room Status:</strong><br/>
+        Connected: {roomState.connected ? '✅' : '❌'}<br/>
+        State: {roomState.connectionState}<br/>
+        Participants: {roomState.participantCount}<br/>
+        Messages Received: {messageCount}
+      </div>
+
+      {errors.length > 0 && (
+        <div style={{ marginBottom: '10px', color: '#ff6b6b' }}>
+          <strong>Errors:</strong><br/>
+          {errors.map((error, i) => (
+            <div key={i} style={{ fontSize: '10px', marginBottom: '2px' }}>
+              {error}
+            </div>
+          ))}
         </div>
       )}
-    </>
+
+      {lastDataMessage && (
+        <div style={{ marginBottom: '10px' }}>
+          <strong>Last Data Message:</strong><br/>
+          <div style={{ 
+            background: 'rgba(255, 255, 255, 0.1)', 
+            padding: '5px', 
+            borderRadius: '4px',
+            fontSize: '10px',
+            maxHeight: '100px',
+            overflow: 'auto'
+          }}>
+            <pre>{JSON.stringify(lastDataMessage, null, 2)}</pre>
+          </div>
+        </div>
+      )}
+
+      {lastActionMessage && (
+        <div style={{ marginBottom: '10px' }}>
+          <strong>Last Action Message:</strong><br/>
+          <div style={{ 
+            background: 'rgba(76, 175, 80, 0.2)', 
+            padding: '5px', 
+            borderRadius: '4px',
+            fontSize: '10px',
+            maxHeight: '100px',
+            overflow: 'auto'
+          }}>
+            <pre>{JSON.stringify(lastActionMessage, null, 2)}</pre>
+          </div>
+        </div>
+      )}
+
+      {messageCount === 0 && roomState.connected && (
+        <div style={{ color: '#ff9800' }}>
+          ⚠️ Room connected but no data messages received yet
+        </div>
+      )}
+
+      {!roomState.connected && (
+        <div style={{ color: '#ff6b6b' }}>
+          ❌ Room not connected - data messages won't be received
+        </div>
+      )}
+    </div>
   )
 } 

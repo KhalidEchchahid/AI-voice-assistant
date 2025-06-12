@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const wsUrl = process.env.LIVEKIT_URL
 
     if (!apiKey || !apiSecret || !wsUrl) {
-      console.error('Missing LiveKit environment variables')
+      // console.error('Missing LiveKit environment variables')
       return NextResponse.json(
         { error: 'LiveKit configuration missing' },
         { status: 500 }
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Generate the token
     const jwt = await token.toJwt()
 
-    console.log('Generated LiveKit token for:', { room, identity, name })
+    // console.log('Generated LiveKit token for:', { room, identity, name })
 
     return NextResponse.json({
       token: jwt,
