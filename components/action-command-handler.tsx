@@ -14,6 +14,12 @@ import { RoomEvent, ConnectionState } from "livekit-client"
 export default function ActionCommandHandler() {
   const room = useRoomContext()
   
+  // Log component render
+  console.log("🐛 ActionCommandHandler: Component rendering", { 
+    timestamp: new Date().toISOString(),
+    roomExists: !!room 
+  })
+  
   // Debug states
   const [roomState, setRoomState] = useState<{
     connected: boolean
@@ -184,87 +190,54 @@ export default function ActionCommandHandler() {
     }
   }, [room])
 
-  // Only show debug UI in development
-  if (process.env.NODE_ENV === 'production') {
-    return null
-  }
+  // Temporarily show in all environments for debugging
+  // if (process.env.NODE_ENV === 'production') {
+  //   return null
+  // }
 
   if (!isDebugVisible) {
     return (
-      <button
-        onClick={() => setIsDebugVisible(true)}
-        style={{
-          position: 'fixed',
-          top: '10px',
-          left: '10px',
-          background: '#4CAF50',
-          color: 'white',
-          border: 'none',
-          borderRadius: '50%',
-          width: '50px',
-          height: '50px',
-          fontSize: '20px',
-          cursor: 'pointer',
-          zIndex: 9999,
-          boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
-          animation: 'pulse 2s infinite'
-        }}
-        title="Show LiveKit Debug Panel"
-      >
-        🐛
-      </button>
+      <>
+        {/* Tailwind CSS animation */}
+        <style jsx>{`
+          @keyframes pulse-debug {
+            0%, 100% { transform: translateY(-50%) scale(1); }
+            50% { transform: translateY(-50%) scale(1.1); }
+          }
+          .pulse-debug {
+            animation: pulse-debug 2s infinite;
+          }
+        `}</style>
+        <button
+          onClick={() => setIsDebugVisible(true)}
+          className="fixed top-1/2 left-5 -translate-y-1/2 bg-green-500 hover:bg-green-600 text-white border-4 border-white rounded-full w-16 h-16 text-2xl cursor-pointer z-[99999] shadow-2xl pulse-debug transition-all duration-300"
+          title="Show LiveKit Debug Panel"
+        >
+          🐛
+        </button>
+      </>
     )
   }
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: '10px',
-      left: '10px',
-      background: 'rgba(0, 0, 0, 0.95)',
-      color: 'white',
-      borderRadius: '8px',
-      fontSize: '12px',
-      maxWidth: '450px',
-      maxHeight: isMinimized ? '50px' : '600px',
-      overflow: 'hidden',
-      zIndex: 9999,
-      fontFamily: 'monospace',
-      border: '2px solid #4CAF50',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
-    }}>
-      <style>{`
-        @keyframes pulse {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.1); }
-          100% { transform: scale(1); }
-        }
-      `}</style>
+    <div className={`fixed top-12 left-5 bg-black/95 text-white rounded-lg text-xs font-mono border-2 border-green-500 shadow-2xl z-[99999] transition-all duration-300 ${
+      isMinimized ? 'max-h-12' : 'max-h-[600px]'
+    } max-w-[450px] overflow-hidden`}>
       {/* Header with controls */}
-      <div style={{ 
-        background: '#4CAF50', 
-        padding: '8px 15px', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        cursor: 'pointer'
-      }} onClick={() => setIsMinimized(!isMinimized)}>
-        <div style={{ fontWeight: 'bold', color: 'white' }}>
+      <div 
+        className="bg-green-500 px-4 py-2 flex justify-between items-center cursor-pointer hover:bg-green-600 transition-colors"
+        onClick={() => setIsMinimized(!isMinimized)}
+      >
+        <div className="font-bold text-white">
           🐛 LiveKit Debug {messageCount > 0 && `(${messageCount} msgs)`}
         </div>
-        <div style={{ display: 'flex', gap: '5px' }}>
+        <div className="flex gap-1">
           <button
             onClick={(e) => {
               e.stopPropagation()
               setIsMinimized(!isMinimized)
             }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
+            className="bg-transparent border-none text-white cursor-pointer text-sm hover:bg-white/20 px-1 rounded transition-colors"
             title={isMinimized ? "Expand" : "Minimize"}
           >
             {isMinimized ? '📈' : '📉'}
@@ -274,13 +247,7 @@ export default function ActionCommandHandler() {
               e.stopPropagation()
               setIsDebugVisible(false)
             }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
+            className="bg-transparent border-none text-white cursor-pointer text-sm hover:bg-white/20 px-1 rounded transition-colors"
             title="Hide Debug Panel"
           >
             ✕
@@ -290,20 +257,20 @@ export default function ActionCommandHandler() {
 
       {/* Content - only show when not minimized */}
       {!isMinimized && (
-        <div style={{ padding: '15px', maxHeight: '550px', overflow: 'auto' }}>
-          <div style={{ marginBottom: '10px' }}>
+        <div className="p-4 max-h-[550px] overflow-auto">
+          <div className="mb-3">
             <strong>Room Status:</strong><br/>
             Connected: {roomState.connected ? '✅' : '❌'}<br/>
             State: {roomState.connectionState}<br/>
             Participants: {roomState.participantCount}<br/>
-            Messages Received: <span style={{color: messageCount > 0 ? '#4CAF50' : '#ff9800'}}>{messageCount}</span>
+            Messages Received: <span className={messageCount > 0 ? 'text-green-400' : 'text-orange-400'}>{messageCount}</span>
           </div>
 
           {errors.length > 0 && (
-            <div style={{ marginBottom: '10px', color: '#ff6b6b' }}>
+            <div className="mb-3 text-red-400">
               <strong>Errors:</strong><br/>
               {errors.map((error, i) => (
-                <div key={i} style={{ fontSize: '10px', marginBottom: '2px' }}>
+                <div key={i} className="text-[10px] mb-1">
                   {error}
                 </div>
               ))}
@@ -311,45 +278,31 @@ export default function ActionCommandHandler() {
           )}
 
           {lastDataMessage && (
-            <div style={{ marginBottom: '10px' }}>
+            <div className="mb-3">
               <strong>Last Data Message:</strong><br/>
-              <div style={{ 
-                background: 'rgba(255, 255, 255, 0.1)', 
-                padding: '5px', 
-                borderRadius: '4px',
-                fontSize: '10px',
-                maxHeight: '100px',
-                overflow: 'auto'
-              }}>
+              <div className="bg-white/10 p-2 rounded text-[10px] max-h-24 overflow-auto">
                 <pre>{JSON.stringify(lastDataMessage, null, 2)}</pre>
               </div>
             </div>
           )}
 
           {lastActionMessage && (
-            <div style={{ marginBottom: '10px' }}>
-              <strong style={{color: '#4CAF50'}}>🎯 Last Action Message:</strong><br/>
-              <div style={{ 
-                background: 'rgba(76, 175, 80, 0.2)', 
-                padding: '5px', 
-                borderRadius: '4px',
-                fontSize: '10px',
-                maxHeight: '100px',
-                overflow: 'auto'
-              }}>
+            <div className="mb-3">
+              <strong className="text-green-400">🎯 Last Action Message:</strong><br/>
+              <div className="bg-green-500/20 p-2 rounded text-[10px] max-h-24 overflow-auto">
                 <pre>{JSON.stringify(lastActionMessage, null, 2)}</pre>
               </div>
             </div>
           )}
 
           {messageCount === 0 && roomState.connected && (
-            <div style={{ color: '#ff9800' }}>
+            <div className="text-orange-400">
               ⚠️ Room connected but no data messages received yet
             </div>
           )}
 
           {!roomState.connected && (
-            <div style={{ color: '#ff6b6b' }}>
+            <div className="text-red-400">
               ❌ Room not connected - data messages won't be received
             </div>
           )}
