@@ -39,7 +39,11 @@ export default function ActionCommandHandler() {
       return
     }
 
-    console.log("ActionCommandHandler: Room available, setting up listeners")
+    console.log("ActionCommandHandler: Room available, setting up listeners", {
+      roomName: room.name,
+      roomState: room.state,
+      timestamp: new Date().toISOString()
+    })
     console.log("ActionCommandHandler: Room state:", {
       name: room.name,
       state: room.state,
@@ -163,11 +167,18 @@ export default function ActionCommandHandler() {
     room.on(RoomEvent.DataReceived, handleDataReceived)
     room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged)
 
-    console.log("ActionCommandHandler: Event listeners attached")
+    console.log("ActionCommandHandler: Event listeners attached", {
+      timestamp: new Date().toISOString(),
+      roomName: room.name
+    })
 
     // Cleanup function
     return () => {
-      console.log("ActionCommandHandler: Cleaning up event listeners")
+      console.log("ActionCommandHandler: Cleaning up event listeners", {
+        timestamp: new Date().toISOString(),
+        roomName: room?.name,
+        reason: "Component unmounting or room changed"
+      })
       room.off(RoomEvent.DataReceived, handleDataReceived)
       room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged)
     }
@@ -184,8 +195,8 @@ export default function ActionCommandHandler() {
         onClick={() => setIsDebugVisible(true)}
         style={{
           position: 'fixed',
-          bottom: '10px',
-          right: '10px',
+          top: '10px',
+          left: '10px',
           background: '#4CAF50',
           color: 'white',
           border: 'none',
@@ -195,7 +206,8 @@ export default function ActionCommandHandler() {
           fontSize: '20px',
           cursor: 'pointer',
           zIndex: 9999,
-          boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+          boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+          animation: 'pulse 2s infinite'
         }}
         title="Show LiveKit Debug Panel"
       >
@@ -207,8 +219,8 @@ export default function ActionCommandHandler() {
   return (
     <div style={{
       position: 'fixed',
-      bottom: '10px',
-      right: '10px',
+      top: '10px',
+      left: '10px',
       background: 'rgba(0, 0, 0, 0.95)',
       color: 'white',
       borderRadius: '8px',
@@ -221,6 +233,13 @@ export default function ActionCommandHandler() {
       border: '2px solid #4CAF50',
       boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
     }}>
+      <style>{`
+        @keyframes pulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
       {/* Header with controls */}
       <div style={{ 
         background: '#4CAF50', 
