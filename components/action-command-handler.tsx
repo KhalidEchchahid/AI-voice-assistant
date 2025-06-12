@@ -25,6 +25,8 @@ export default function ActionCommandHandler() {
   const [lastActionMessage, setLastActionMessage] = useState<any>(null)
   const [messageCount, setMessageCount] = useState(0)
   const [errors, setErrors] = useState<string[]>([])
+  const [isDebugVisible, setIsDebugVisible] = useState(true)
+  const [isMinimized, setIsMinimized] = useState(false)
 
   const addError = (error: string) => {
     console.error("ActionCommandHandler Error:", error)
@@ -80,6 +82,9 @@ export default function ActionCommandHandler() {
         })
 
         setMessageCount(prev => prev + 1)
+        // Make debug panel visible when data is received
+        setIsDebugVisible(true)
+        setIsMinimized(false)
 
         // Decode the payload
         const textDecoder = new TextDecoder()
@@ -173,86 +178,162 @@ export default function ActionCommandHandler() {
     return null
   }
 
+  if (!isDebugVisible) {
+    return (
+      <button
+        onClick={() => setIsDebugVisible(true)}
+        style={{
+          position: 'fixed',
+          bottom: '10px',
+          right: '10px',
+          background: '#4CAF50',
+          color: 'white',
+          border: 'none',
+          borderRadius: '50%',
+          width: '50px',
+          height: '50px',
+          fontSize: '20px',
+          cursor: 'pointer',
+          zIndex: 9999,
+          boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+        }}
+        title="Show LiveKit Debug Panel"
+      >
+        🐛
+      </button>
+    )
+  }
+
   return (
     <div style={{
       position: 'fixed',
       bottom: '10px',
       right: '10px',
-      background: 'rgba(0, 0, 0, 0.9)',
+      background: 'rgba(0, 0, 0, 0.95)',
       color: 'white',
-      padding: '15px',
       borderRadius: '8px',
       fontSize: '12px',
-      maxWidth: '400px',
-      maxHeight: '500px',
-      overflow: 'auto',
+      maxWidth: '450px',
+      maxHeight: isMinimized ? '50px' : '600px',
+      overflow: 'hidden',
       zIndex: 9999,
-      fontFamily: 'monospace'
+      fontFamily: 'monospace',
+      border: '2px solid #4CAF50',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
     }}>
-      <div style={{ fontWeight: 'bold', marginBottom: '10px', color: '#4CAF50' }}>
-        🐛 LiveKit Data Debug
-      </div>
-      
-      <div style={{ marginBottom: '10px' }}>
-        <strong>Room Status:</strong><br/>
-        Connected: {roomState.connected ? '✅' : '❌'}<br/>
-        State: {roomState.connectionState}<br/>
-        Participants: {roomState.participantCount}<br/>
-        Messages Received: {messageCount}
+      {/* Header with controls */}
+      <div style={{ 
+        background: '#4CAF50', 
+        padding: '8px 15px', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        cursor: 'pointer'
+      }} onClick={() => setIsMinimized(!isMinimized)}>
+        <div style={{ fontWeight: 'bold', color: 'white' }}>
+          🐛 LiveKit Debug {messageCount > 0 && `(${messageCount} msgs)`}
+        </div>
+        <div style={{ display: 'flex', gap: '5px' }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsMinimized(!isMinimized)
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+            title={isMinimized ? "Expand" : "Minimize"}
+          >
+            {isMinimized ? '📈' : '📉'}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsDebugVisible(false)
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+            title="Hide Debug Panel"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
-      {errors.length > 0 && (
-        <div style={{ marginBottom: '10px', color: '#ff6b6b' }}>
-          <strong>Errors:</strong><br/>
-          {errors.map((error, i) => (
-            <div key={i} style={{ fontSize: '10px', marginBottom: '2px' }}>
-              {error}
+      {/* Content - only show when not minimized */}
+      {!isMinimized && (
+        <div style={{ padding: '15px', maxHeight: '550px', overflow: 'auto' }}>
+          <div style={{ marginBottom: '10px' }}>
+            <strong>Room Status:</strong><br/>
+            Connected: {roomState.connected ? '✅' : '❌'}<br/>
+            State: {roomState.connectionState}<br/>
+            Participants: {roomState.participantCount}<br/>
+            Messages Received: <span style={{color: messageCount > 0 ? '#4CAF50' : '#ff9800'}}>{messageCount}</span>
+          </div>
+
+          {errors.length > 0 && (
+            <div style={{ marginBottom: '10px', color: '#ff6b6b' }}>
+              <strong>Errors:</strong><br/>
+              {errors.map((error, i) => (
+                <div key={i} style={{ fontSize: '10px', marginBottom: '2px' }}>
+                  {error}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {lastDataMessage && (
-        <div style={{ marginBottom: '10px' }}>
-          <strong>Last Data Message:</strong><br/>
-          <div style={{ 
-            background: 'rgba(255, 255, 255, 0.1)', 
-            padding: '5px', 
-            borderRadius: '4px',
-            fontSize: '10px',
-            maxHeight: '100px',
-            overflow: 'auto'
-          }}>
-            <pre>{JSON.stringify(lastDataMessage, null, 2)}</pre>
-          </div>
-        </div>
-      )}
+          {lastDataMessage && (
+            <div style={{ marginBottom: '10px' }}>
+              <strong>Last Data Message:</strong><br/>
+              <div style={{ 
+                background: 'rgba(255, 255, 255, 0.1)', 
+                padding: '5px', 
+                borderRadius: '4px',
+                fontSize: '10px',
+                maxHeight: '100px',
+                overflow: 'auto'
+              }}>
+                <pre>{JSON.stringify(lastDataMessage, null, 2)}</pre>
+              </div>
+            </div>
+          )}
 
-      {lastActionMessage && (
-        <div style={{ marginBottom: '10px' }}>
-          <strong>Last Action Message:</strong><br/>
-          <div style={{ 
-            background: 'rgba(76, 175, 80, 0.2)', 
-            padding: '5px', 
-            borderRadius: '4px',
-            fontSize: '10px',
-            maxHeight: '100px',
-            overflow: 'auto'
-          }}>
-            <pre>{JSON.stringify(lastActionMessage, null, 2)}</pre>
-          </div>
-        </div>
-      )}
+          {lastActionMessage && (
+            <div style={{ marginBottom: '10px' }}>
+              <strong style={{color: '#4CAF50'}}>🎯 Last Action Message:</strong><br/>
+              <div style={{ 
+                background: 'rgba(76, 175, 80, 0.2)', 
+                padding: '5px', 
+                borderRadius: '4px',
+                fontSize: '10px',
+                maxHeight: '100px',
+                overflow: 'auto'
+              }}>
+                <pre>{JSON.stringify(lastActionMessage, null, 2)}</pre>
+              </div>
+            </div>
+          )}
 
-      {messageCount === 0 && roomState.connected && (
-        <div style={{ color: '#ff9800' }}>
-          ⚠️ Room connected but no data messages received yet
-        </div>
-      )}
+          {messageCount === 0 && roomState.connected && (
+            <div style={{ color: '#ff9800' }}>
+              ⚠️ Room connected but no data messages received yet
+            </div>
+          )}
 
-      {!roomState.connected && (
-        <div style={{ color: '#ff6b6b' }}>
-          ❌ Room not connected - data messages won't be received
+          {!roomState.connected && (
+            <div style={{ color: '#ff6b6b' }}>
+              ❌ Room not connected - data messages won't be received
+            </div>
+          )}
         </div>
       )}
     </div>
