@@ -39,6 +39,42 @@ export default function ActionCommandHandler() {
     setErrors(prev => [...prev.slice(-4), error]) // Keep last 5 errors
   }
 
+  // Test function to manually send data (for debugging)
+  const sendTestData = async () => {
+    if (room && room.localParticipant) {
+      try {
+        const testPayload = {
+          type: "execute_actions",
+          actions: [
+            {
+              action: "click",
+              selector: "#test-button",
+              id: "test_action_1"
+            }
+          ],
+          website_id: "test_website",
+          user_intent: "Test action from frontend"
+        }
+        
+        const testMessage = JSON.stringify(testPayload)
+        console.log("🧪 Sending test data:", testMessage)
+        
+        await room.localParticipant.publishData(
+          new TextEncoder().encode(testMessage),
+          { topic: "action_commands" }
+        )
+        
+        console.log("✅ Test data sent successfully")
+      } catch (error) {
+        console.error("❌ Error sending test data:", error)
+        addError(`Test send failed: ${error}`)
+      }
+    } else {
+      console.error("❌ Cannot send test data: no room or local participant")
+      addError("Cannot send test data: no room connection")
+    }
+  }
+
   useEffect(() => {
     if (!room) {
       console.log("ActionCommandHandler: Room not available yet")
@@ -264,6 +300,17 @@ export default function ActionCommandHandler() {
             State: {roomState.connectionState}<br/>
             Participants: {roomState.participantCount}<br/>
             Messages Received: <span className={messageCount > 0 ? 'text-green-400' : 'text-orange-400'}>{messageCount}</span>
+          </div>
+
+          {/* Test button for debugging */}
+          <div className="mb-3">
+            <button
+              onClick={sendTestData}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs"
+              title="Send test data message"
+            >
+              🧪 Send Test Data
+            </button>
           </div>
 
           {errors.length > 0 && (
