@@ -9,10 +9,27 @@
       return
     }
     
+    // Resolve helper script URL relative to where the loader itself was fetched.
+    let helperSrc = 'assistant-helper.js'
+
+    try {
+      // `document.currentScript` points to the <script> that is executing right now
+      const current = document.currentScript
+
+      if (current && current.src) {
+        const url = new URL(current.src, window.location.href)
+        // Replace the filename (everything after the last '/') with helper file name
+        url.pathname = url.pathname.replace(/[^/]*$/, 'assistant-helper.js')
+        helperSrc = url.href
+      }
+    } catch (err) {
+      console.warn('AI Assistant Loader: Could not determine base path of loader script, falling back to relative helper path', err)
+    }
+
     const script = document.createElement('script')
-    script.src = 'assistant-helper.js'
-    script.onload = () => console.log("AI Assistant Loader: Helper script loaded successfully")
-    script.onerror = () => console.error("AI Assistant Loader: Failed to load helper script")
+    script.src = helperSrc
+    script.onload = () => console.log(`AI Assistant Loader: Helper script loaded successfully from ${helperSrc}`)
+    script.onerror = () => console.error(`AI Assistant Loader: Failed to load helper script from ${helperSrc}`)
     document.head.appendChild(script)
   }
 
