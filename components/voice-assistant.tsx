@@ -27,6 +27,7 @@ import TranscriptArea from "@/components/transcript-area"
 import { Button } from "@/components/ui/button"
 import { Phone, PhoneOff, Loader2, Mic, MicOff, Camera, CameraOff } from "lucide-react"
 import type { Message } from "@/components/transcript-area"
+import ActionCommandHandler from "@/components/action-command-handler"
 
 // Helper function to convert transcription segment to chat message (playground style)
 function segmentToChatMessage(
@@ -537,6 +538,8 @@ export default function VoiceAssistant() {
       }}
     >
       <div className="flex-1 flex flex-col min-h-0 relative">
+        {/* Action command bridge */}
+        <ActionCommandHandler />
         <VoiceAssistantInner 
           onMessagesUpdate={setPersistedMessages}
           isCameraEnabled={isCameraEnabled}

@@ -1,33 +1,5 @@
-{/* AI Voice Assistant - Embeddable Widget */}
-        {/* <Script
-          src="/assistant-loader.js"
-          strategy="afterInteractive"
-          data-iframe-url="https://ai-voice-assistant-nu.vercel.app/"
-          data-initially-visible="false"
-          data-theme="gradient"
-          data-primary-color="#ffffff"
-          data-secondary-color="#d9d9d9"
-          data-icon-style="microphone"
-          data-position="right"
-          data-width="400px"
-          data-height="600px"
-          data-draggable-icon="true"
-          data-keyboard-shortcut="a"
-          data-show-header="true"
-          data-animation-style="slide-up"
-          data-animation-duration="0.5s"
-          data-mobile-fullscreen="false"
-        />
-
-        {/* Helper script for action execution */}
-        <Script
-          src="/assistant-helper.js"
-          strategy="afterInteractive"
-        /> */}
 
 
 
-        //perfect I can interact with the assistant perfectly , now let's focus on solving the transcript issue I want also to delete the message from the front end like Hello! I'm your AI assistant. Click the call button to connect and unlock full voice control capabilities.
 
-🎙️ Voice assistant connected! I can now hear you and respond with voice. Try speaking to me! , and olny show the messages comming from the agent itslef okay , if you need to delete the current implementation and rebuid one inspiring from the livekitplayground open source code . use context7 
-
+        
