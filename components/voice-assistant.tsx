@@ -144,11 +144,11 @@ function VoiceAssistantInner({
     // Update parent component with messages for persistence
     onMessagesUpdate?.(allMessages)
     
-    // console.log("Playground-style transcript processing:", {
-    //   agentSegments: agentMessages.segments.length,
-    //   localSegments: localMessages.segments.length,
-    //   totalMessages: allMessages.length
-    // })
+    console.log("Playground-style transcript processing:", {
+      agentSegments: agentMessages.segments.length,
+      localSegments: localMessages.segments.length,
+      totalMessages: allMessages.length
+    })
   }, [
     transcripts,
     chatMessages,
@@ -161,15 +161,15 @@ function VoiceAssistantInner({
 
   // Log transcript activity
   useEffect(() => {
-    // console.log("VoiceAssistant: Agent messages:", agentMessages.segments)
+    console.log("VoiceAssistant: Agent messages:", agentMessages.segments)
   }, [agentMessages.segments])
 
   useEffect(() => {
-    // console.log("VoiceAssistant: Local messages:", localMessages.segments)
+    console.log("VoiceAssistant: Local messages:", localMessages.segments)
   }, [localMessages.segments])
 
   useEffect(() => {
-    // console.log("VoiceAssistant: Chat messages:", chatMessages)
+    console.log("VoiceAssistant: Chat messages:", chatMessages)
   }, [chatMessages])
 
   // Determine current state
@@ -186,13 +186,13 @@ function VoiceAssistantInner({
 
   // Debug agent connection issues
   useEffect(() => {
-    // console.log("Voice Assistant Debug:", {
-    //   connectionState,
-    //   agentConnected: voiceAssistant.agent !== undefined,
-    //   audioTrackExists: voiceAssistant.audioTrack !== undefined,
-    //   voiceAssistantState: voiceAssistant.state,
-    //   currentState,
-    // })
+    console.log("Voice Assistant Debug:", {
+      connectionState,
+      agentConnected: voiceAssistant.agent !== undefined,
+      audioTrackExists: voiceAssistant.audioTrack !== undefined,
+      voiceAssistantState: voiceAssistant.state,
+      currentState,
+    })
   }, [connectionState, voiceAssistant.agent, voiceAssistant.audioTrack, voiceAssistant.state, currentState])
 
   const isConnected = connectionState === ConnectionState.Connected
@@ -298,7 +298,7 @@ export default function VoiceAssistant() {
     try {
       setIsLoading(true)
       setError(null)
-      // console.log("Generating LiveKit token...")
+      console.log("Generating LiveKit token...")
 
       const response = await fetch('/api/livekit-token', {
         method: 'POST',
@@ -309,7 +309,7 @@ export default function VoiceAssistant() {
           room: 'voice-assistant-room',
           identity: `user_${Date.now()}`,
           name: 'Voice Assistant User',
-          // agentName: undefined, // Let LiveKit auto-dispatch any available agent
+          agentName: 'voice-assistant-agent',
         }),
       })
 
@@ -318,13 +318,14 @@ export default function VoiceAssistant() {
         throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
-      const { token: newToken, wsUrl: newWsUrl } = await response.json()
+      const { token: newToken, wsUrl: newWsUrl, agentName } = await response.json()
       
       setWsUrl(newWsUrl)
       setToken(newToken)
       setShouldConnect(true)
       
-      // console.log("Token generated successfully, connecting...")
+      console.log("Token generated successfully with agent dispatch:", { agentName })
+      console.log("Connecting to room...")
 
     } catch (err) {
       console.error("Failed to generate token:", err)
@@ -526,13 +527,13 @@ export default function VoiceAssistant() {
         // Don't automatically disconnect on error - let user retry
       }}
       onConnected={() => {
-        // console.log("LiveKit: Successfully connected to room")
+        console.log("LiveKit: Successfully connected to room")
         setError(null)
         setHasEverConnected(true)
         setIsLoading(false) // Clear loading state on successful connection
       }}
       onDisconnected={(reason) => {
-        // console.log("LiveKit: Disconnected from room", reason)
+        console.log("LiveKit: Disconnected from room", reason)
         setShouldConnect(false)
         setIsLoading(false) // Clear loading state on disconnect
       }}

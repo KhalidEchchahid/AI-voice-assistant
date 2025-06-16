@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const wsUrl = process.env.LIVEKIT_URL
 
     if (!apiKey || !apiSecret || !wsUrl) {
-      // console.error('Missing LiveKit environment variables')
+      console.error('Missing LiveKit environment variables')
       return NextResponse.json(
         { error: 'LiveKit configuration missing' },
         { status: 500 }
@@ -22,11 +22,16 @@ export async function POST(request: NextRequest) {
     // Create access token with proper identity and metadata
     const userIdentity = identity || `user_${Math.random().toString(36).substr(2, 9)}`
     const userName = name || 'Voice Assistant User'
+    const defaultAgentName = agentName || 'voice-assistant-agent'  // Default agent name
     
     const token = new AccessToken(apiKey, apiSecret, {
       identity: userIdentity,
       name: userName,
-      metadata: JSON.stringify({ user_id: userIdentity }),
+      metadata: JSON.stringify({ 
+        user_id: userIdentity,
+        agent_requested: true,
+        timestamp: Date.now()
+      }),
     })
 
     // Grant permissions (including canUpdateOwnMetadata like playground)
@@ -39,29 +44,42 @@ export async function POST(request: NextRequest) {
       canUpdateOwnMetadata: true,
     })
 
-    // Add agent dispatch configuration if agentName provided (like playground)
-    // Note: Commenting out for now to test basic connection without agent dispatch
-    // if (agentName) {
-    //   token.roomConfig = new RoomConfiguration({
-    //     agents: [
-    //       new RoomAgentDispatch({
-    //         agentName: agentName,
-    //         metadata: JSON.stringify({ user_id: userIdentity }),
-    //       }),
-    //     ],
-    //   })
-    // }
+    // FIXED: Enable agent dispatch configuration with proper RoomConfiguration
+    console.log(`Configuring agent dispatch for agent: ${defaultAgentName}`)
+    
+    const roomConfig = new RoomConfiguration({
+      agents: [
+        new RoomAgentDispatch({
+          agentName: defaultAgentName,
+          metadata: JSON.stringify({ 
+            user_id: userIdentity,
+            requested_at: Date.now(),
+            source: 'frontend_token_request'
+          }),
+        }),
+      ],
+    })
+    
+    // Add room configuration to token
+    token.roomConfig = roomConfig
 
     // Generate the token
     const jwt = await token.toJwt()
 
-    // console.log('Generated LiveKit token for:', { room, identity, name })
+    console.log('Generated LiveKit token for:', { 
+      room: room || 'voice-assistant-room', 
+      identity: userIdentity, 
+      name: userName,
+      agentName: defaultAgentName,
+      agentDispatch: true
+    })
 
     return NextResponse.json({
       token: jwt,
       wsUrl: wsUrl,
       room: room || 'voice-assistant-room',
-      identity: identity || token.identity,
+      identity: userIdentity,
+      agentName: defaultAgentName,
     })
 
   } catch (error) {
