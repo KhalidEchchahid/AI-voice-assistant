@@ -3,7 +3,7 @@
   console.log("AI Assistant Helper: Initializing action execution system")
 
   // Version and compatibility check
-  const HELPER_VERSION = "2.0.0"
+  const HELPER_VERSION = "2.1.0"
   
   // Error boundary for safer execution
   function safeExecute(fn, context = "unknown") {
@@ -19,7 +19,7 @@
   
   // Find element using multiple strategies
   function findElement(actionCommand) {
-    console.log("AI Assistant: Finding element with:", actionCommand)
+    console.log("🔍 AI Assistant: Finding element with:", actionCommand)
     
     let element = null
     
@@ -28,11 +28,11 @@
       try {
         element = document.querySelector(actionCommand.selector)
         if (element) {
-          console.log("AI Assistant: Found element via CSS selector:", actionCommand.selector)
+          console.log("✅ AI Assistant: Found element via CSS selector:", actionCommand.selector)
           return element
         }
       } catch (e) {
-        console.warn("AI Assistant: CSS selector failed:", actionCommand.selector, e)
+        console.warn("⚠️ AI Assistant: CSS selector failed:", actionCommand.selector, e)
       }
     }
     
@@ -48,26 +48,26 @@
         )
         element = result.singleNodeValue
         if (element) {
-          console.log("AI Assistant: Found element via XPath:", actionCommand.xpath)
+          console.log("✅ AI Assistant: Found element via XPath:", actionCommand.xpath)
           return element
         }
       } catch (e) {
-        console.warn("AI Assistant: XPath failed:", actionCommand.xpath, e)
+        console.warn("⚠️ AI Assistant: XPath failed:", actionCommand.xpath, e)
       }
     }
     
     // Strategy 3: Text content search
-    if (actionCommand.text) {
+    if (actionCommand.text && actionCommand.action !== "type") {
       try {
         const xpath = `//*[contains(text(), "${actionCommand.text}")]`
         const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null)
         element = result.singleNodeValue
         if (element) {
-          console.log("AI Assistant: Found element via text content:", actionCommand.text)
+          console.log("✅ AI Assistant: Found element via text content:", actionCommand.text)
           return element
         }
       } catch (e) {
-        console.warn("AI Assistant: Text search failed:", actionCommand.text, e)
+        console.warn("⚠️ AI Assistant: Text search failed:", actionCommand.text, e)
       }
     }
     
@@ -76,15 +76,15 @@
       try {
         element = document.elementFromPoint(actionCommand.coordinates.x, actionCommand.coordinates.y)
         if (element) {
-          console.log("AI Assistant: Found element via coordinates:", actionCommand.coordinates)
+          console.log("✅ AI Assistant: Found element via coordinates:", actionCommand.coordinates)
           return element
         }
       } catch (e) {
-        console.warn("AI Assistant: Coordinate search failed:", actionCommand.coordinates, e)
+        console.warn("⚠️ AI Assistant: Coordinate search failed:", actionCommand.coordinates, e)
       }
     }
     
-    console.warn("AI Assistant: Could not find element with any strategy")
+    console.warn("❌ AI Assistant: Could not find element with any strategy for:", actionCommand)
     return null
   }
   
@@ -109,7 +109,15 @@
   
   // Execute individual action
   function executeAction(actionCommand) {
-    console.log("AI Assistant: Executing action:", actionCommand)
+    console.log("🎯 AI Assistant: Executing action:", {
+      action: actionCommand.action,
+      id: actionCommand.id || actionCommand.command_id,
+      selector: actionCommand.selector,
+      xpath: actionCommand.xpath,
+      value: actionCommand.value,
+      text: actionCommand.text,
+      options: actionCommand.options
+    })
     
     try {
       // Some actions don't need elements
@@ -118,7 +126,7 @@
       
       if (needsElement && !element) {
         const error = `Element not found for action: ${actionCommand.action}`
-        console.error("AI Assistant:", error)
+        console.error("❌ AI Assistant:", error)
         return { success: false, error: error, action_id: actionCommand.command_id || actionCommand.id }
       }
       
@@ -131,25 +139,27 @@
       switch (actionCommand.action) {
         case "click":
           element.click()
-          console.log("AI Assistant: Clicked element")
+          console.log("✅ AI Assistant: Clicked element")
           break
           
         case "type":
           // Use 'value' field from backend, fallback to 'text'
           const textToType = actionCommand.value || actionCommand.text || ""
+          console.log("📝 AI Assistant: Typing text:", textToType)
           
           element.focus()
           
           // Clear existing content if specified
           if (actionCommand.options?.clear_first || actionCommand.options?.clearFirst) {
             element.value = ""
+            console.log("🗑️ AI Assistant: Cleared existing content")
           }
           
           element.value = textToType
           element.dispatchEvent(new Event('input', { bubbles: true }))
           element.dispatchEvent(new Event('change', { bubbles: true }))
           element.dispatchEvent(new Event('keyup', { bubbles: true }))
-          console.log("AI Assistant: Typed text:", textToType)
+          console.log("✅ AI Assistant: Typed text:", textToType)
           break
           
         case "clear":
@@ -157,7 +167,7 @@
             element.value = ""
             element.dispatchEvent(new Event('input', { bubbles: true }))
             element.dispatchEvent(new Event('change', { bubbles: true }))
-            console.log("AI Assistant: Cleared input")
+            console.log("✅ AI Assistant: Cleared input")
           }
           break
           
@@ -165,6 +175,7 @@
           if (element) {
             // Scroll specific element
             element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            console.log("✅ AI Assistant: Scrolled to element")
           } else {
             // Scroll page
             const direction = actionCommand.options?.direction || actionCommand.direction || "down"
@@ -175,19 +186,19 @@
             } else if (direction === "up") {
               window.scrollBy(0, -amount)
             }
+            console.log(`✅ AI Assistant: Scrolled ${direction} by ${amount}px`)
           }
-          console.log("AI Assistant: Scrolled")
           break
           
         case "hover":
           element.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
           element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
-          console.log("AI Assistant: Hovered over element")
+          console.log("✅ AI Assistant: Hovered over element")
           break
           
         case "focus":
           element.focus()
-          console.log("AI Assistant: Focused element")
+          console.log("✅ AI Assistant: Focused element")
           break
           
         case "submit":
@@ -202,14 +213,14 @@
               element.click() // Fallback to click
             }
           }
-          console.log("AI Assistant: Submitted form")
+          console.log("✅ AI Assistant: Submitted form")
           break
           
         case "check":
           if (element.type === "checkbox" || element.type === "radio") {
             element.checked = true
             element.dispatchEvent(new Event('change', { bubbles: true }))
-            console.log("AI Assistant: Checked element")
+            console.log("✅ AI Assistant: Checked element")
           } else {
             throw new Error("Element is not a checkbox or radio button")
           }
@@ -219,7 +230,7 @@
           if (element.type === "checkbox") {
             element.checked = false
             element.dispatchEvent(new Event('change', { bubbles: true }))
-            console.log("AI Assistant: Unchecked element")
+            console.log("✅ AI Assistant: Unchecked element")
           } else {
             throw new Error("Element is not a checkbox")
           }
@@ -229,7 +240,7 @@
           const url = actionCommand.value || actionCommand.url
           if (url) {
             window.location.href = url
-            console.log("AI Assistant: Navigating to:", url)
+            console.log("✅ AI Assistant: Navigating to:", url)
           } else {
             throw new Error("No URL provided for navigation")
           }
@@ -237,13 +248,13 @@
           
         case "wait":
           const waitTime = actionCommand.timeout || actionCommand.value || 1000
-          console.log("AI Assistant: Waiting", waitTime, "ms")
+          console.log(`⏱️ AI Assistant: Waiting ${waitTime}ms`)
           // Return immediately, the delay will be handled by executeActions
           break
           
         case "getValue":
           const value = element.value || element.textContent || element.innerText || ""
-          console.log("AI Assistant: Got value:", value)
+          console.log("✅ AI Assistant: Got value:", value)
           return { 
             success: true, 
             message: "Value retrieved successfully",
@@ -254,7 +265,7 @@
           
         case "getText":
           const text = element.textContent || element.innerText || ""
-          console.log("AI Assistant: Got text:", text)
+          console.log("✅ AI Assistant: Got text:", text)
           return { 
             success: true, 
             message: "Text retrieved successfully",
@@ -275,7 +286,7 @@
       }
       
     } catch (error) {
-      console.error("AI Assistant: Action execution error:", error)
+      console.error("❌ AI Assistant: Action execution error:", error)
       return { 
         success: false, 
         error: error.message,
@@ -287,7 +298,7 @@
   
   // Execute multiple actions
   function executeActions(command) {
-    console.log("AI Assistant: Received command from assistant iframe:", command)
+    console.log("🚀 AI Assistant: Received command from assistant iframe:", command)
     
     // Handle both direct actions array and wrapped command structure
     let actions = []
@@ -302,11 +313,19 @@
     }
     
     if (!Array.isArray(actions) || actions.length === 0) {
-      console.error("AI Assistant: Invalid actions format - expected non-empty array")
+      console.error("❌ AI Assistant: Invalid actions format - expected non-empty array, got:", {
+        command,
+        actions,
+        commandType: typeof command,
+        actionsType: typeof actions
+      })
       return
     }
     
-    console.log(`AI Assistant: Executing ${actions.length} actions:`, actions)
+    console.log(`🎯 AI Assistant: Executing ${actions.length} actions:`)
+    actions.forEach((action, index) => {
+      console.log(`  ${index + 1}. ${action.action}: ${action.options?.description || 'No description'}`)
+    })
     
     const results = []
     let currentDelay = 0
@@ -317,13 +336,16 @@
       let actionDelay = 500
       if (actionCommand.action === "wait") {
         actionDelay = actionCommand.timeout || actionCommand.value || 1000
+      } else if (actionCommand.delay_before) {
+        actionDelay = actionCommand.delay_before
       }
       
       setTimeout(() => {
+        console.log(`⏱️ AI Assistant: Executing action ${index + 1}/${actions.length} after ${currentDelay}ms delay`)
         const result = executeAction(actionCommand)
         results.push(result)
         
-        console.log(`AI Assistant: Action ${index + 1}/${actions.length} result:`, result)
+        console.log(`${result.success ? '✅' : '❌'} AI Assistant: Action ${index + 1}/${actions.length} result:`, result)
         
         // Send result back to iframe via the loader's message system
         sendActionResult(result, index, actions.length)
@@ -339,7 +361,7 @@
             timestamp: new Date().toISOString()
           }
           
-          console.log("AI Assistant: All actions completed:", summary)
+          console.log("🎉 AI Assistant: All actions completed:", summary)
           sendActionsSummary(summary)
         }
       }, currentDelay)
@@ -375,7 +397,7 @@
   // Handle LiveKit data channel messages
   function handleLiveKitDataMessage(dataMessage) {
     try {
-      console.log("AI Assistant: Processing LiveKit data message:", dataMessage)
+      console.log("📨 AI Assistant: Processing LiveKit data message:", dataMessage)
       
       // Parse the JSON if it's still a string
       let parsedMessage = dataMessage
@@ -385,10 +407,10 @@
       
       // Check if this is an action command
       if (parsedMessage && (parsedMessage.commands || parsedMessage.actions)) {
-        console.log("AI Assistant: Executing actions from LiveKit data channel")
+        console.log("🎯 AI Assistant: Executing actions from LiveKit data channel")
         executeActions(parsedMessage)
       } else if (parsedMessage && parsedMessage.type === 'conversational_response') {
-        console.log("AI Assistant: Received conversational response:", parsedMessage.message)
+        console.log("💬 AI Assistant: Received conversational response:", parsedMessage.message)
         // Pass back to iframe for display/handling
         if (window.AIAssistantLoader && window.AIAssistantLoader.sendMessageToIframe) {
           window.AIAssistantLoader.sendMessageToIframe({
@@ -398,10 +420,10 @@
           })
         }
       } else {
-        console.log("AI Assistant: Unknown LiveKit data message format:", parsedMessage)
+        console.log("❓ AI Assistant: Unknown LiveKit data message format:", parsedMessage)
       }
     } catch (e) {
-      console.error("AI Assistant: Error handling LiveKit data message:", e)
+      console.error("❌ AI Assistant: Error handling LiveKit data message:", e)
     }
   }
 
@@ -421,5 +443,5 @@
     ]
   }
 
-  console.log(`AI Assistant Helper: Initialization complete (v${HELPER_VERSION})`)
+  console.log(`✅ AI Assistant Helper: Initialization complete (v${HELPER_VERSION})`)
 })() 
