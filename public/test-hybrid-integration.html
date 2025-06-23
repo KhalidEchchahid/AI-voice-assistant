@@ -367,6 +367,9 @@
                     <button class="test-btn" onclick="simulateBackendRequest()">
                         🚀 Simulate Backend Request
                     </button>
+                    <button class="test-btn" onclick="testDOMStreamingFlow()">
+                        📡 Test Proactive DOM State Streaming
+                    </button>
                 </div>
                 <div class="results" id="communication-results">Communication tests ready...</div>
                 <button class="clear-btn" onclick="clearResults('communication-results')">Clear</button>
@@ -668,6 +671,48 @@
                     }
                 }, i * 300);
             }
+        }
+
+        async function testDOMStreamingFlow() {
+            logResult('communication-results', 'Testing proactive DOM state streaming...', 'info');
+            
+            // Check if ActionCommandHandler and streaming are active
+            const hasActionHandler = document.querySelector('[id*="ActionCommandHandler"]') || 
+                                   window.ActionCommandHandler;
+            const hasDOMMonitor = window.AIAssistantDOMMonitor && window.AIAssistantDOMMonitor.isReady();
+            
+            if (!hasDOMMonitor) {
+                logResult('communication-results', '❌ DOM Monitor not available', 'error');
+                return;
+            }
+            
+            // Get current DOM state
+            const domStats = window.AIAssistantDOMMonitor.getStats();
+            const allElements = window.AIAssistantDOMMonitor.getAllElements({ visible: true });
+            
+            logResult('communication-results', `DOM State: ${domStats.totalElements} total, ${domStats.visibleElements} visible`, 'info');
+            logResult('communication-results', `Streaming ready: ActionHandler=${!!hasActionHandler}, DOM=${!!hasDOMMonitor}`, 'info');
+            
+            // Simulate what the streaming would send
+            const simulatedStreamData = {
+                type: "dom_state_update",
+                timestamp: Date.now(),
+                stats: domStats,
+                elements: allElements.slice(0, 20),
+                website_url: window.location.href,
+                page_title: document.title
+            };
+            
+            logResult('communication-results', `Simulated stream payload: ${JSON.stringify(simulatedStreamData).length} bytes`, 'success');
+            logResult('communication-results', `Elements to stream: ${simulatedStreamData.elements.length}`, 'info');
+            
+            // Show a few example elements
+            simulatedStreamData.elements.slice(0, 3).forEach((el, i) => {
+                const text = el.text || el.elementId || 'No text';
+                logResult('communication-results', `  ${i+1}. ${el.role || 'unknown'}: ${text.slice(0, 50)}`, 'info');
+            });
+            
+            updateStatus('communication-status', true);
         }
 
         // Performance Tests
