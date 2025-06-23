@@ -55,6 +55,29 @@ export default function ActionCommandHandler() {
   }
 
   // Test function to manually send data (for debugging)
+  // Function to send DOM Monitor responses back to backend
+  const sendDomMonitorResponse = async (responseData: any) => {
+    if (room && room.localParticipant) {
+      try {
+        const responseMessage = JSON.stringify(responseData)
+        console.log("📤 Sending DOM Monitor response to backend:", responseMessage)
+        
+        await room.localParticipant.publishData(
+          new TextEncoder().encode(responseMessage),
+          { topic: "dom_monitor_responses" }
+        )
+        
+        console.log("✅ DOM Monitor response sent successfully")
+      } catch (error) {
+        console.error("❌ Error sending DOM Monitor response:", error)
+        addError(`DOM response send failed: ${error}`)
+      }
+    } else {
+      console.error("❌ Cannot send DOM Monitor response: no room connection")
+      addError("Cannot send DOM response: no room connection")
+    }
+  }
+
   const sendTestData = async () => {
     if (room && room.localParticipant) {
       try {
@@ -198,8 +221,32 @@ export default function ActionCommandHandler() {
         // Update debug state with last received message
         setLastDataMessage(messageWithMetadata)
 
+        // Check message type and handle accordingly
+        if (parsedData && parsedData.type === "dom_monitor_request") {
+          console.log("ActionCommandHandler: DOM Monitor request received:", parsedData)
+          
+          // Forward DOM Monitor request to parent window
+          const domRequestMessage = {
+            action: "dom_monitor_request",
+            payload: parsedData,
+            type: "dom_monitor_request",
+            request_id: parsedData.request_id,
+            intent: parsedData.intent,
+            options: parsedData.options,
+            metadata: {
+              timestamp: new Date().toISOString(),
+              source: "voice_assistant_backend",
+            },
+          }
+
+          console.log("ActionCommandHandler: Forwarding DOM Monitor request to parent:", domRequestMessage)
+          window.parent.postMessage(domRequestMessage, "*")
+          
+          // Add to history
+          setLastDataMessage({...messageWithMetadata, forwarded_as_dom_request: true})
+        } 
         // Check if this is an execute_actions message
-        if (parsedData && parsedData.type === "execute_actions" && Array.isArray(parsedData.actions)) {
+        else if (parsedData && parsedData.type === "execute_actions" && Array.isArray(parsedData.actions)) {
           console.log("ActionCommandHandler: Execute actions message received:", parsedData)
           console.log("🎯 ACTION DETAILS:", {
             actionsCount: parsedData.actions.length,
@@ -265,6 +312,27 @@ export default function ActionCommandHandler() {
       roomName: room.name
     })
 
+    // Listen for DOM Monitor responses from parent window
+    const handleWindowMessage = (event: MessageEvent) => {
+      try {
+        const data = event.data
+        if (data && data.type === "dom_monitor_response") {
+          console.log("📥 Received DOM Monitor response from parent:", data)
+          
+          // Send response back to backend via LiveKit
+          sendDomMonitorResponse(data)
+          
+          // Add to debug history
+          addToHistory(data, "dom_monitor_response")
+        }
+      } catch (error) {
+        console.error("❌ Error handling window message:", error)
+        addError(`Window message error: ${error}`)
+      }
+    }
+
+    window.addEventListener('message', handleWindowMessage)
+
     // Cleanup function
     return () => {
       console.log("ActionCommandHandler: Cleaning up event listeners", {
@@ -274,6 +342,7 @@ export default function ActionCommandHandler() {
       })
       room.off(RoomEvent.DataReceived, handleDataReceived)
       room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged)
+      window.removeEventListener('message', handleWindowMessage)
     }
   }, [room])
 

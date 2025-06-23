@@ -797,7 +797,77 @@
               }
               break
 
-            // Handle DOM Monitor commands
+            // Handle DOM Monitor requests from backend (via LiveKit)
+            case "dom_monitor_request":
+              console.log('📡 Received DOM Monitor request from backend via iframe:', command);
+              
+              // Extract request details
+              const requestData = command.payload || command;
+              const requestId = requestData.request_id;
+              const intent = requestData.intent;
+              const options = requestData.options || {};
+              
+              if (window.AIAssistantDOMMonitor) {
+                try {
+                  console.log('🔍 Processing DOM Monitor request:', { requestId, intent, options });
+                  
+                  // Call DOM Monitor to find elements based on intent
+                  const elements = window.AIAssistantDOMMonitor.findElements(intent, options);
+                  
+                  console.log('📋 DOM Monitor found elements:', elements);
+                  
+                  // Prepare response for backend
+                  const response = {
+                    type: 'dom_monitor_response',
+                    request_id: requestId,
+                    intent: intent,
+                    elements: elements,
+                    success: true,
+                    timestamp: new Date().toISOString(),
+                    source: 'live_dom_monitor'
+                  };
+                  
+                  // Send response back to iframe (which will forward to backend)
+                  sendMessageToIframe(response);
+                  console.log('📤 Sent DOM Monitor response to iframe:', response);
+                  
+                } catch (error) {
+                  console.error('❌ Error processing DOM Monitor request:', error);
+                  
+                  // Send error response
+                  const errorResponse = {
+                    type: 'dom_monitor_response',
+                    request_id: requestId,
+                    intent: intent,
+                    elements: [],
+                    success: false,
+                    error: error.message,
+                    timestamp: new Date().toISOString(),
+                    source: 'live_dom_monitor'
+                  };
+                  
+                  sendMessageToIframe(errorResponse);
+                }
+              } else {
+                console.warn('⚠️ DOM Monitor not available for request:', requestId);
+                
+                // Send not available response
+                const notAvailableResponse = {
+                  type: 'dom_monitor_response',
+                  request_id: requestId,
+                  intent: intent,
+                  elements: [],
+                  success: false,
+                  error: 'DOM Monitor not initialized',
+                  timestamp: new Date().toISOString(),
+                  source: 'live_dom_monitor'
+                };
+                
+                sendMessageToIframe(notAvailableResponse);
+              }
+              break
+
+            // Handle DOM Monitor commands (legacy support)
             case "dom_monitor_find_elements":
               if (window.AIAssistantDOMMonitor) {
                 const elements = window.AIAssistantDOMMonitor.findElements(command.intent, command.options)
