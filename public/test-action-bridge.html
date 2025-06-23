@@ -116,17 +116,46 @@ Waiting for actions...\n
         <button class="test-button" onclick="testActionExecution()">
             Test Action Execution Manually
         </button>
+        <button class="test-button" onclick="testDOMMonitor()">
+            Test Live DOM Monitor
+        </button>
+        
+        <h2>DOM Monitor Status</h2>
+        <div id="dom-monitor-status" class="status">
+            <strong>DOM Monitor Status:</strong> <span id="monitor-status">Checking...</span><br>
+            <strong>Cached Elements:</strong> <span id="cached-elements">-</span><br>
+            <strong>Visible Elements:</strong> <span id="visible-elements">-</span><br>
+            <strong>Memory Usage:</strong> <span id="memory-usage">-</span> KB<br>
+            <button class="test-button" onclick="refreshDOMMonitorStatus()">Refresh Status</button>
+        </div>
+
+        <h2>Dynamic Content Test</h2>
+        <div>
+            <button class="test-button" onclick="addDynamicElement()">
+                Add Dynamic Button
+            </button>
+            <button class="test-button" onclick="removeDynamicElement()">
+                Remove Dynamic Button
+            </button>
+            <div id="dynamic-content-area" style="margin: 10px; padding: 10px; border: 1px dashed #ccc;">
+                <!-- Dynamic elements will be added here -->
+            </div>
+        </div>
         
         <h2>Console Instructions</h2>
         <div class="status">
             <strong>To test manually in browser console:</strong><br>
             <code>
 // Test the action execution directly<br>
-window.AIAssistant?.testAction?.({<br>
+window.AIAssistantLoader?.testAction?.({<br>
 &nbsp;&nbsp;action: "click",<br>
 &nbsp;&nbsp;selector: "#test-button",<br>
 &nbsp;&nbsp;id: "test_001"<br>
-});
+});<br><br>
+
+// Test DOM Monitor<br>
+window.AIAssistantLoader?.domMonitor?.findElements("test button");<br>
+window.AIAssistantLoader?.domMonitor?.getStats();<br>
             </code>
         </div>
     </div>
@@ -209,6 +238,132 @@ window.AIAssistant?.testAction?.({<br>
             logAction("Manual test actions sent")
         }
         
+        // Test DOM Monitor functionality
+        function testDOMMonitor() {
+            logAction("DOM Monitor test started...")
+            
+            // Check if DOM Monitor is available
+            if (!window.AIAssistantLoader?.domMonitor?.isReady()) {
+                logAction("❌ DOM Monitor not ready or available")
+                return
+            }
+            
+            // Test 1: Find elements by intent
+            logAction("🔍 Testing element finding...")
+            const testIntents = [
+                "test button",
+                "contact button", 
+                "input field",
+                "submit form"
+            ]
+            
+            testIntents.forEach(intent => {
+                const elements = window.AIAssistantLoader.domMonitor.findElements(intent)
+                logAction(`Intent "${intent}": Found ${elements.length} elements`)
+                
+                if (elements.length > 0) {
+                    const topMatch = elements[0]
+                    logAction(`  Top match: ${topMatch.element?.tagName || 'unknown'} (confidence: ${topMatch.confidence?.toFixed(2) || 'unknown'})`)
+                }
+            })
+            
+            // Test 2: Get all elements
+            const allElements = window.AIAssistantLoader.domMonitor.getAllElements({ visible: true })
+            logAction(`📊 Total visible interactive elements: ${allElements.length}`)
+            
+            // Test 3: Get statistics
+            const stats = window.AIAssistantLoader.domMonitor.getStats()
+            if (stats) {
+                logAction(`📈 DOM Monitor Stats:`)
+                logAction(`  - Total cached: ${stats.totalElements}`)
+                logAction(`  - Visible: ${stats.visibleElements}`)
+                logAction(`  - Interactable: ${stats.interactableElements}`)
+                logAction(`  - Memory usage: ${stats.memoryUsage} KB`)
+            }
+            
+            // Update status display
+            refreshDOMMonitorStatus()
+            
+            logAction("✅ DOM Monitor test completed")
+        }
+        
+        // Refresh DOM Monitor status display
+        function refreshDOMMonitorStatus() {
+            const statusElement = document.getElementById('monitor-status')
+            const cachedElement = document.getElementById('cached-elements')
+            const visibleElement = document.getElementById('visible-elements')
+            const memoryElement = document.getElementById('memory-usage')
+            
+            if (window.AIAssistantLoader?.domMonitor?.isReady()) {
+                statusElement.textContent = "✅ Ready"
+                statusElement.style.color = "green"
+                
+                const stats = window.AIAssistantLoader.domMonitor.getStats()
+                if (stats) {
+                    cachedElement.textContent = stats.totalElements
+                    visibleElement.textContent = stats.visibleElements
+                    memoryElement.textContent = stats.memoryUsage
+                }
+            } else {
+                statusElement.textContent = "❌ Not Ready"
+                statusElement.style.color = "red"
+                cachedElement.textContent = "-"
+                visibleElement.textContent = "-"
+                memoryElement.textContent = "-"
+            }
+        }
+        
+        // Add dynamic element to test real-time monitoring
+        let dynamicElementCounter = 0
+        function addDynamicElement() {
+            dynamicElementCounter++
+            const container = document.getElementById('dynamic-content-area')
+            
+            const button = document.createElement('button')
+            button.id = `dynamic-button-${dynamicElementCounter}`
+            button.className = 'test-button'
+            button.textContent = `Dynamic Button ${dynamicElementCounter}`
+            button.onclick = () => {
+                logAction(`Dynamic Button ${dynamicElementCounter} clicked!`)
+            }
+            
+            container.appendChild(button)
+            logAction(`➕ Added Dynamic Button ${dynamicElementCounter}`)
+            
+            // Refresh DOM Monitor to show it detected the new element
+            setTimeout(() => {
+                refreshDOMMonitorStatus()
+                
+                // Test finding the new element
+                const elements = window.AIAssistantLoader?.domMonitor?.findElements(`dynamic button ${dynamicElementCounter}`)
+                if (elements && elements.length > 0) {
+                    logAction(`✅ DOM Monitor detected new dynamic button`)
+                } else {
+                    logAction(`⚠️ DOM Monitor may not have detected new dynamic button yet`)
+                }
+            }, 500)
+        }
+        
+        // Remove dynamic element
+        function removeDynamicElement() {
+            const container = document.getElementById('dynamic-content-area')
+            const buttons = container.querySelectorAll('.test-button')
+            
+            if (buttons.length > 0) {
+                const lastButton = buttons[buttons.length - 1]
+                const buttonId = lastButton.id
+                container.removeChild(lastButton)
+                logAction(`➖ Removed ${buttonId}`)
+                
+                // Refresh status after removal
+                setTimeout(() => {
+                    refreshDOMMonitorStatus()
+                }, 500)
+            } else {
+                logAction("No dynamic buttons to remove")
+            }
+        }
+        
         // Override console.log to capture AI Assistant logs
         const originalConsoleLog = console.log
         console.log = function(...args) {
@@ -236,6 +391,27 @@ window.AIAssistant?.testAction?.({<br>
             }
             
             logAction("Added window.testAction() for console testing")
+            
+            // Check DOM Monitor status periodically
+            let domMonitorCheckCount = 0
+            const checkDOMMonitor = () => {
+                domMonitorCheckCount++
+                
+                if (window.AIAssistantLoader?.domMonitor?.isReady()) {
+                    logAction("🔄 DOM Monitor is ready!")
+                    refreshDOMMonitorStatus()
+                    return // Stop checking
+                } else if (domMonitorCheckCount < 20) {
+                    // Keep checking for up to 10 seconds
+                    setTimeout(checkDOMMonitor, 500)
+                } else {
+                    logAction("⚠️ DOM Monitor not ready after 10 seconds")
+                    refreshDOMMonitorStatus()
+                }
+            }
+            
+            // Start checking after a brief delay
+            setTimeout(checkDOMMonitor, 1000)
         })
         
         // Listen for action results

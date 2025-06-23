@@ -4,7 +4,7 @@
   window.AIAssistantModules = window.AIAssistantModules || {}
 
   // Add the initialization function
-  window.AIAssistantModules.init = (scriptElement) => {
+  window.AIAssistantModules.init = async (scriptElement) => {
     // Read configuration
     window.AIAssistantModules.config.readFromAttributes(scriptElement)
 
@@ -20,6 +20,16 @@
 
     // Initialize event handlers
     window.AIAssistantModules.events.init()
+
+    // Initialize DOM monitor if available
+    if (window.AIAssistantModules.domMonitor) {
+      try {
+        await window.AIAssistantModules.domMonitor.init()
+        console.log("AI Assistant: DOM Monitor initialized successfully")
+      } catch (error) {
+        console.warn("AI Assistant: DOM Monitor initialization failed:", error)
+      }
+    }
 
     // Initialize public API
     window.AIAssistantModules.api.init()

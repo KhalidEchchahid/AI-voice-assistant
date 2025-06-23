@@ -28,8 +28,41 @@
 
     const script = document.createElement('script')
     script.src = helperSrc
-    script.onload = () => console.log(`AI Assistant Loader: Helper script loaded successfully from ${helperSrc}`)
+    script.onload = () => {
+      console.log(`AI Assistant Loader: Helper script loaded successfully from ${helperSrc}`)
+      // Load DOM Monitor after helper is loaded
+      loadDOMMonitorScript()
+    }
     script.onerror = () => console.error(`AI Assistant Loader: Failed to load helper script from ${helperSrc}`)
+    document.head.appendChild(script)
+  }
+
+  // Load the DOM Monitor script for real-time element discovery
+  function loadDOMMonitorScript() {
+    if (window.AIAssistantDOMMonitor) {
+      console.log("AI Assistant Loader: DOM Monitor already loaded")
+      return
+    }
+    
+    // Resolve DOM monitor script URL
+    let monitorSrc = 'live-dom-monitor.js'
+
+    try {
+      const current = document.currentScript || document.querySelector('script[src*="assistant-loader"]')
+
+      if (current && current.src) {
+        const url = new URL(current.src, window.location.href)
+        url.pathname = url.pathname.replace(/[^/]*$/, 'live-dom-monitor.js')
+        monitorSrc = url.href
+      }
+    } catch (err) {
+      console.warn('AI Assistant Loader: Could not determine base path for DOM monitor script, falling back to relative path', err)
+    }
+
+    const script = document.createElement('script')
+    script.src = monitorSrc
+    script.onload = () => console.log(`AI Assistant Loader: DOM Monitor script loaded successfully from ${monitorSrc}`)
+    script.onerror = () => console.error(`AI Assistant Loader: Failed to load DOM Monitor script from ${monitorSrc}`)
     document.head.appendChild(script)
   }
 
@@ -743,42 +776,119 @@
       const command = event.data
       console.log("AI Assistant: Received command from assistant iframe:", command)
 
-      // Handle different command types
-      if (command && command.action) {
-        switch (command.action) {
-          case "execute_actions":
-            // Delegate to helper
-            if (window.AIAssistantHelper) {
-              window.AIAssistantHelper.executeActions(command)
-            } else {
-              console.error("AI Assistant: Helper not loaded for action execution")
-            }
-            break
-            
-          // Handle LiveKit data channel messages forwarded from the widget
-          case "livekit_data_received":
-            if (window.AIAssistantHelper) {
-              window.AIAssistantHelper.handleLiveKitDataMessage(command.data)
-            } else {
-              console.error("AI Assistant: Helper not loaded for LiveKit data handling")
-            }
-            break
-            
-          case "getPageTitle":
-            sendMessageToIframe({
-              action: "pageTitleResponse",
-              title: document.title,
-              requestId: command.requestId,
-            })
-            break
-            
-          case "closeAssistant":
-            toggleVisibility()
-            break
-            
-          default:
-            console.warn("AI Assistant: Unknown action:", command.action)
-        }
+              // Handle different command types
+        if (command && command.action) {
+          switch (command.action) {
+            case "execute_actions":
+              // Delegate to helper
+              if (window.AIAssistantHelper) {
+                window.AIAssistantHelper.executeActions(command)
+              } else {
+                console.error("AI Assistant: Helper not loaded for action execution")
+              }
+              break
+              
+            // Handle LiveKit data channel messages forwarded from the widget
+            case "livekit_data_received":
+              if (window.AIAssistantHelper) {
+                window.AIAssistantHelper.handleLiveKitDataMessage(command.data)
+              } else {
+                console.error("AI Assistant: Helper not loaded for LiveKit data handling")
+              }
+              break
+
+            // Handle DOM Monitor commands
+            case "dom_monitor_find_elements":
+              if (window.AIAssistantDOMMonitor) {
+                const elements = window.AIAssistantDOMMonitor.findElements(command.intent, command.options)
+                sendMessageToIframe({
+                  action: "dom_monitor_response",
+                  requestId: command.requestId,
+                  data: elements,
+                  success: true
+                })
+              } else {
+                sendMessageToIframe({
+                  action: "dom_monitor_response", 
+                  requestId: command.requestId,
+                  error: "DOM Monitor not loaded",
+                  success: false
+                })
+              }
+              break
+
+            case "dom_monitor_get_stats":
+              if (window.AIAssistantDOMMonitor) {
+                const stats = window.AIAssistantDOMMonitor.getStats()
+                sendMessageToIframe({
+                  action: "dom_monitor_response",
+                  requestId: command.requestId,
+                  data: stats,
+                  success: true
+                })
+              } else {
+                sendMessageToIframe({
+                  action: "dom_monitor_response",
+                  requestId: command.requestId, 
+                  error: "DOM Monitor not loaded",
+                  success: false
+                })
+              }
+              break
+
+            case "dom_monitor_get_all_elements":
+              if (window.AIAssistantDOMMonitor) {
+                const elements = window.AIAssistantDOMMonitor.getAllElements(command.filter)
+                sendMessageToIframe({
+                  action: "dom_monitor_response",
+                  requestId: command.requestId,
+                  data: elements,
+                  success: true
+                })
+              } else {
+                sendMessageToIframe({
+                  action: "dom_monitor_response",
+                  requestId: command.requestId,
+                  error: "DOM Monitor not loaded", 
+                  success: false
+                })
+              }
+              break
+
+            case "dom_monitor_refresh":
+              if (window.AIAssistantDOMMonitor) {
+                const result = window.AIAssistantDOMMonitor.refresh()
+                sendMessageToIframe({
+                  action: "dom_monitor_response",
+                  requestId: command.requestId,
+                  data: result,
+                  success: true
+                })
+              } else {
+                sendMessageToIframe({
+                  action: "dom_monitor_response",
+                  requestId: command.requestId,
+                  error: "DOM Monitor not loaded",
+                  success: false
+                })
+              }
+              break
+              
+            case "getPageTitle":
+              sendMessageToIframe({
+                action: "pageTitleResponse",
+                title: document.title,
+                requestId: command.requestId,
+              })
+              break
+              
+            case "closeAssistant":
+              toggleVisibility()
+              break
+              
+            default:
+              console.warn("AI Assistant: Unknown action:", command.action)
+          }
       } else if (command && command.commands) {
         // Direct command execution (new format from backend)
         console.log("AI Assistant: Received direct command execution request")
@@ -837,7 +947,55 @@
         config = { ...config, ...newConfig }
         injectStyles()
       },
-      sendMessageToIframe: sendMessageToIframe
+      sendMessageToIframe: sendMessageToIframe,
+      
+      // DOM Monitor integration
+      domMonitor: {
+        findElements: (intent, options = {}) => {
+          if (window.AIAssistantDOMMonitor) {
+            return window.AIAssistantDOMMonitor.findElements(intent, options)
+          } else {
+            console.warn("DOM Monitor not available")
+            return []
+          }
+        },
+        
+        getStats: () => {
+          if (window.AIAssistantDOMMonitor) {
+            return window.AIAssistantDOMMonitor.getStats()
+          } else {
+            return null
+          }
+        },
+        
+        getAllElements: (filter = {}) => {
+          if (window.AIAssistantDOMMonitor) {
+            return window.AIAssistantDOMMonitor.getAllElements(filter)
+          } else {
+            return []
+          }
+        },
+        
+        refresh: () => {
+          if (window.AIAssistantDOMMonitor) {
+            return window.AIAssistantDOMMonitor.refresh()
+          } else {
+            return { success: false, error: "DOM Monitor not available" }
+          }
+        },
+        
+        isReady: () => {
+          return window.AIAssistantDOMMonitor && window.AIAssistantDOMMonitor.isReady()
+        },
+        
+        getStatus: () => {
+          if (window.AIAssistantDOMMonitor) {
+            return window.AIAssistantDOMMonitor.getStatus()
+          } else {
+            return { available: false, error: "DOM Monitor not loaded" }
+          }
+        }
+      }
     }
     // an other test
     console.log("AI Assistant Loader: Initialization complete")
