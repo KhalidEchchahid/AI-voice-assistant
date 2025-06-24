@@ -530,46 +530,104 @@
         }
 
         async function simulateHybridElementSearch(intent) {
-            // Simulate the hybrid element finder behavior
-            await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 300));
+            // REAL IMPLEMENTATION: No more simulation, use actual DOM querying
+            await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100));
             
-            const elements = document.querySelectorAll('.demo-button, .demo-input, .demo-select');
-            const matches = [];
+            if (!window.AIAssistantDOMMonitor || !window.AIAssistantDOMMonitor.isReady()) {
+                return {
+                    success: false,
+                    error: 'DOM Monitor not available for real testing',
+                    matches: [],
+                    total_matches: 0,
+                    processing_time_ms: 0
+                };
+            }
             
-            // Simple intent matching for demo
-            elements.forEach(element => {
-                let confidence = 0;
-                const text = element.textContent?.toLowerCase() || element.placeholder?.toLowerCase() || '';
-                const id = element.id?.toLowerCase() || '';
+            const startTime = performance.now();
+            
+            try {
+                // Get REAL elements from DOM Monitor
+                const allElements = window.AIAssistantDOMMonitor.getAllElements({ visible: true, interactable: true });
+                const matches = [];
                 
-                if (intent.toLowerCase().includes('submit') && (text.includes('submit') || id.includes('submit'))) {
-                    confidence = 0.95;
-                } else if (intent.toLowerCase().includes('email') && (text.includes('email') || id.includes('email'))) {
-                    confidence = 0.9;
-                } else if (intent.toLowerCase().includes('category') && (text.includes('category') || element.tagName === 'SELECT')) {
-                    confidence = 0.85;
-                } else if (intent.toLowerCase().includes('download') && text.includes('download')) {
-                    confidence = 0.88;
-                }
+                // Implement REAL intent matching logic (simplified)
+                const intentLower = intent.toLowerCase();
                 
-                if (confidence > 0.5) {
-                    matches.push({
-                        element_id: element.id || 'unknown',
-                        confidence: confidence,
-                        source: Math.random() > 0.5 ? 'hybrid' : 'dom_monitor',
-                        reasoning: `Element "${text || id}" matches intent keywords`,
-                        selectors: [{ type: 'id', value: `#${element.id}`, confidence: 0.9 }]
-                    });
-                }
-            });
-            
-            return {
-                success: matches.length > 0,
-                matches: matches.sort((a, b) => b.confidence - a.confidence),
-                total_matches: matches.length,
-                processing_time_ms: 100 + Math.random() * 200,
-                error: matches.length === 0 ? 'No matching elements found' : null
-            };
+                allElements.forEach((element, index) => {
+                    let confidence = 0;
+                    const text = (element.text || '').toLowerCase();
+                    const role = (element.role || '').toLowerCase();
+                    const elementId = (element.elementId || '').toLowerCase();
+                    
+                    // Real confidence scoring based on intent keywords
+                    if (intentLower.includes('submit') && (text.includes('submit') || elementId.includes('submit'))) {
+                        confidence = 0.95;
+                    } else if (intentLower.includes('email') && (text.includes('email') || elementId.includes('email') || role.includes('textbox'))) {
+                        confidence = 0.9;
+                    } else if (intentLower.includes('category') && role.includes('combobox')) {
+                        confidence = 0.85;
+                    } else if (intentLower.includes('download') && text.includes('download')) {
+                        confidence = 0.88;
+                    } else if (intentLower.includes('input') && role.includes('textbox')) {
+                        confidence = 0.8;
+                    } else if (intentLower.includes('button') && role.includes('button')) {
+                        confidence = 0.75;
+                    } else if (intentLower.includes('about') && text.includes('about')) {
+                        confidence = 0.9;
+                    } else {
+                        // Fuzzy matching for other cases
+                        const intentWords = intentLower.split(' ');
+                        const textWords = text.split(' ');
+                        const matchCount = intentWords.filter(word => textWords.some(textWord => textWord.includes(word))).length;
+                        confidence = Math.min(0.7, matchCount / intentWords.length);
+                    }
+                    
+                    if (confidence > 0.3) {  // Only include reasonable matches
+                        matches.push({
+                            element_id: element.elementId || `element_${index}`,
+                            confidence: confidence,
+                            source: 'dom_monitor_real',
+                            reasoning: `Real element "${text || role}" matches intent keywords`,
+                            selectors: [{
+                                type: 'xpath',
+                                value: element.xpath || `//div[${index}]`,
+                                confidence: 0.9
+                            }],
+                            element_data: {
+                                text: element.text || '',
+                                role: element.role || '',
+                                xpath: element.xpath || '',
+                                position: element.position || {}
+                            }
+                        });
+                    }
+                });
+                
+                const endTime = performance.now();
+                const processingTime = endTime - startTime;
+                
+                // Sort by confidence
+                matches.sort((a, b) => b.confidence - a.confidence);
+                
+                return {
+                    success: matches.length > 0,
+                    matches: matches,
+                    total_matches: matches.length,
+                    processing_time_ms: processingTime,
+                    error: matches.length === 0 ? 'No real matching elements found' : null,
+                    source: 'real_dom_monitor'
+                };
+                
+            } catch (error) {
+                const endTime = performance.now();
+                return {
+                    success: false,
+                    error: `Real DOM query failed: ${error.message}`,
+                    matches: [],
+                    total_matches: 0,
+                    processing_time_ms: endTime - startTime
+                };
+            }
         }
 
         async function testBulkDiscovery() {
@@ -596,42 +654,84 @@
         async function testLiveKitFlow() {
             logResult('communication-results', 'Testing LiveKit data channel flow...', 'info');
             
-            // Simulate LiveKit communication
-            const testMessage = {
-                type: 'dom_monitor_request',
-                request_id: 'test-' + Date.now(),
-                intent: 'click the submit button',
-                options: { visible: true, interactable: true }
-            };
+            // Check if we have real LiveKit connection
+            const hasLiveKit = window.ActionCommandHandler && window.ActionCommandHandler.room;
+            const hasAssistantLoader = window.AIAssistantLoader;
             
-            logResult('communication-results', `Sending test message: ${JSON.stringify(testMessage, null, 2)}`, 'info');
+            if (!hasLiveKit) {
+                logResult('communication-results', '❌ No real LiveKit connection available', 'error');
+                logResult('communication-results', 'ActionCommandHandler room not found', 'error');
+                return;
+            }
             
-            // Simulate response
-            setTimeout(() => {
-                const response = {
-                    type: 'dom_monitor_response',
-                    request_id: testMessage.request_id,
-                    success: true,
-                    elements: [{ id: 'submit-button', confidence: 0.95 }]
+            if (!hasAssistantLoader) {
+                logResult('communication-results', '❌ AI Assistant Loader not available', 'error');
+                return;
+            }
+            
+            // REAL TEST: Try to send actual data via LiveKit
+            try {
+                const testMessage = {
+                    type: 'test_message',
+                    timestamp: Date.now(),
+                    content: 'Real LiveKit integration test'
                 };
                 
-                logResult('communication-results', `Received response: ${JSON.stringify(response, null, 2)}`, 'success');
-                updateStatus('communication-status', true);
-            }, 500);
+                logResult('communication-results', `Sending real LiveKit message: ${JSON.stringify(testMessage)}`, 'info');
+                
+                // Send via actual LiveKit data channel
+                if (window.ActionCommandHandler.room && window.ActionCommandHandler.room.localParticipant) {
+                    await window.ActionCommandHandler.room.localParticipant.publishData(
+                        JSON.stringify(testMessage),
+                        'test_topic'
+                    );
+                    logResult('communication-results', '✅ Successfully sent real LiveKit message', 'success');
+                } else {
+                    logResult('communication-results', '❌ No LiveKit local participant available', 'error');
+                }
+                
+            } catch (error) {
+                logResult('communication-results', `❌ Real LiveKit test failed: ${error.message}`, 'error');
+            }
+            
+            updateStatus('communication-status', true);
         }
 
         async function testRequestResponse() {
-            logResult('communication-results', 'Testing request/response cycle...', 'info');
+            logResult('communication-results', 'Testing REAL request/response cycle...', 'info');
             
-            const requestId = 'cycle-test-' + Date.now();
+            // Check if DOM Monitor is really available
+            if (!window.AIAssistantDOMMonitor || !window.AIAssistantDOMMonitor.isReady()) {
+                logResult('communication-results', '❌ Real DOM Monitor not available', 'error');
+                return;
+            }
             
-            // Simulate full cycle
-            logResult('communication-results', `1. Backend → Frontend: DOM Monitor request (${requestId})`, 'info');
-            logResult('communication-results', `2. Frontend → DOM Monitor: Element search`, 'info');
-            logResult('communication-results', `3. DOM Monitor → Frontend: Results found`, 'info');
-            logResult('communication-results', `4. Frontend → Backend: Response with elements`, 'success');
-            
-            updateStatus('communication-status', true);
+            // REAL TEST: Actually query DOM Monitor
+            try {
+                const startTime = performance.now();
+                
+                // Make real DOM Monitor request
+                const realElements = window.AIAssistantDOMMonitor.getAllElements({ visible: true });
+                const realStats = window.AIAssistantDOMMonitor.getStats();
+                
+                const endTime = performance.now();
+                const responseTime = endTime - startTime;
+                
+                logResult('communication-results', `✅ Real DOM query completed in ${responseTime.toFixed(1)}ms`, 'success');
+                logResult('communication-results', `Found ${realElements.length} real elements`, 'info');
+                logResult('communication-results', `Real stats: ${JSON.stringify(realStats)}`, 'info');
+                
+                // Show sample real elements
+                realElements.slice(0, 3).forEach((el, i) => {
+                    const text = el.text || el.elementId || 'No text';
+                    logResult('communication-results', `  Real Element ${i+1}: ${el.role || 'unknown'} - ${text.slice(0, 50)}`, 'info');
+                });
+                
+                updateStatus('communication-status', true);
+            } catch (error) {
+                logResult('communication-results', `❌ Real DOM Monitor test failed: ${error.message}`, 'error');
+                updateStatus('communication-status', false);
+            }
         }
 
         async function testTimeout() {
@@ -648,28 +748,42 @@
         }
 
         async function simulateBackendRequest() {
-            logResult('communication-results', 'Simulating complete backend request flow...', 'info');
+            logResult('communication-results', 'Testing REAL backend communication...', 'info');
             
-            const steps = [
-                'User voice input: "click the submit button"',
-                'Agent processes intent with LLM',
-                'Hybrid finder queries RAG system',
-                'Hybrid finder sends DOM Monitor request via LiveKit',
-                'Frontend receives and processes request',
-                'DOM Monitor searches live elements',
-                'Response sent back via LiveKit',
-                'Backend combines RAG + DOM results',
-                'Action commands generated and sent to frontend',
-                'Frontend executes actions on page'
-            ];
+            // Check for real assistant loader connection
+            if (!window.AIAssistantLoader) {
+                logResult('communication-results', '❌ No real assistant loader connection', 'error');
+                return;
+            }
             
-            for (let i = 0; i < steps.length; i++) {
-                setTimeout(() => {
-                    logResult('communication-results', `${i + 1}. ${steps[i]}`, 'info');
-                    if (i === steps.length - 1) {
-                        logResult('communication-results', '✅ Complete flow simulation finished', 'success');
-                    }
-                }, i * 300);
+            // Try to access the iframe and check connection
+            const iframe = document.querySelector('iframe[src*="localhost:3000"]');
+            if (!iframe) {
+                logResult('communication-results', '❌ No assistant iframe found', 'error');
+                return;
+            }
+            
+            logResult('communication-results', '✅ Assistant iframe found', 'success');
+            logResult('communication-results', `Iframe src: ${iframe.src}`, 'info');
+            
+            // Check if iframe is loaded
+            iframe.onload = () => {
+                logResult('communication-results', '✅ Assistant iframe loaded successfully', 'success');
+            };
+            
+            iframe.onerror = () => {
+                logResult('communication-results', '❌ Assistant iframe failed to load', 'error');
+            };
+            
+            // Test real postMessage communication
+            try {
+                iframe.contentWindow.postMessage({
+                    type: 'test_backend_communication',
+                    timestamp: Date.now()
+                }, '*');
+                logResult('communication-results', '✅ Real postMessage sent to assistant iframe', 'success');
+            } catch (error) {
+                logResult('communication-results', `❌ Real postMessage failed: ${error.message}`, 'error');
             }
         }
 
