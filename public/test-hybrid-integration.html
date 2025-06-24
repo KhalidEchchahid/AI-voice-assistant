@@ -370,6 +370,9 @@
                     <button class="test-btn" onclick="testDOMStreamingFlow()">
                         📡 Test Proactive DOM State Streaming
                     </button>
+                    <button class="test-btn" onclick="testAssistantDataSending()">
+                        🎯 Test Data Send to Assistant
+                    </button>
                 </div>
                 <div class="results" id="communication-results">Communication tests ready...</div>
                 <button class="clear-btn" onclick="clearResults('communication-results')">Clear</button>
@@ -826,6 +829,147 @@
                 logResult('communication-results', `  ${i+1}. ${el.role || 'unknown'}: ${text.slice(0, 50)}`, 'info');
             });
             
+            updateStatus('communication-status', true);
+        }
+
+        async function testAssistantDataSending() {
+            logResult('communication-results', '🎯 Testing data sending to assistant backend...', 'info');
+            
+            // Check if we have the iframe and can access LiveKit through it
+            const iframe = document.querySelector('iframe[src*="localhost:3000"]');
+            if (!iframe) {
+                logResult('communication-results', '❌ No assistant iframe found', 'error');
+                return;
+            }
+            
+            logResult('communication-results', '✅ Assistant iframe found', 'success');
+            
+            // Test 1: Send test action execution data 
+            try {
+                const testActionData = {
+                    type: "execute_actions",
+                    actions: [
+                        {
+                            action: "click",
+                            selector: "#submit-button", 
+                            id: "test_action_click_submit",
+                            confidence: 0.95,
+                            source: "test",
+                            options: {
+                                description: "Test click on submit button",
+                                test: true
+                            }
+                        }
+                    ],
+                    website_id: "test_website",
+                    user_intent: "Test clicking submit button from test page",
+                    test_metadata: {
+                        timestamp: Date.now(),
+                        source: "test_page",
+                        test_type: "action_execution"
+                    }
+                };
+                
+                // Send via postMessage to iframe (which should relay via LiveKit)
+                iframe.contentWindow.postMessage({
+                    action: "send_test_data_to_assistant",
+                    payload: testActionData,
+                    timestamp: Date.now()
+                }, '*');
+                
+                logResult('communication-results', '📤 Sent test action data to assistant via iframe', 'success');
+                logResult('communication-results', `Action payload size: ${JSON.stringify(testActionData).length} bytes`, 'info');
+                
+            } catch (error) {
+                logResult('communication-results', `❌ Failed to send action data: ${error.message}`, 'error');
+            }
+            
+            // Test 2: Send DOM Monitor request simulation
+            try {
+                const domRequestData = {
+                    type: "dom_monitor_request",
+                    request_id: "test_dom_request_" + Date.now(),
+                    action: "find_elements",
+                    intent: "find all buttons on the page",
+                    options: {
+                        visible: true,
+                        interactable: true,
+                        test: true
+                    },
+                    timestamp: Date.now()
+                };
+                
+                iframe.contentWindow.postMessage({
+                    action: "send_dom_request_to_assistant",
+                    payload: domRequestData,
+                    timestamp: Date.now()
+                }, '*');
+                
+                logResult('communication-results', '📤 Sent DOM request simulation to assistant', 'success');
+                logResult('communication-results', `DOM request ID: ${domRequestData.request_id}`, 'info');
+                
+            } catch (error) {
+                logResult('communication-results', `❌ Failed to send DOM request: ${error.message}`, 'error');
+            }
+            
+            // Test 3: Send test voice command simulation
+            try {
+                const voiceCommandData = {
+                    type: "voice_command_test",
+                    command: "test dom monitor connection",
+                    intent: "test the hybrid element finder and LiveKit communication",
+                    metadata: {
+                        timestamp: Date.now(),
+                        source: "test_page",
+                        simulated: true
+                    }
+                };
+                
+                iframe.contentWindow.postMessage({
+                    action: "simulate_voice_command",
+                    payload: voiceCommandData,
+                    timestamp: Date.now()
+                }, '*');
+                
+                logResult('communication-results', '🎤 Sent voice command simulation to assistant', 'success');
+                logResult('communication-results', `Command: "${voiceCommandData.command}"`, 'info');
+                
+            } catch (error) {
+                logResult('communication-results', `❌ Failed to send voice command: ${error.message}`, 'error');
+            }
+            
+            // Test 4: Check if DOM Monitor can respond with real data
+            if (window.AIAssistantDOMMonitor && window.AIAssistantDOMMonitor.isReady()) {
+                try {
+                    const realDOMData = {
+                        type: "real_dom_data",
+                        stats: window.AIAssistantDOMMonitor.getStats(),
+                        elements: window.AIAssistantDOMMonitor.getAllElements({ visible: true, interactable: true }).slice(0, 10),
+                        page_info: {
+                            url: window.location.href,
+                            title: document.title,
+                            timestamp: Date.now()
+                        },
+                        source: "live_dom_monitor"
+                    };
+                    
+                    iframe.contentWindow.postMessage({
+                        action: "send_real_dom_data",
+                        payload: realDOMData,
+                        timestamp: Date.now()
+                    }, '*');
+                    
+                    logResult('communication-results', '📊 Sent real DOM data to assistant', 'success');
+                    logResult('communication-results', `Real elements found: ${realDOMData.elements.length}`, 'info');
+                    
+                } catch (error) {
+                    logResult('communication-results', `❌ Failed to send real DOM data: ${error.message}`, 'error');
+                }
+            } else {
+                logResult('communication-results', '⚠️ DOM Monitor not available for real data test', 'error');
+            }
+            
+            logResult('communication-results', '🎯 Assistant data sending test completed', 'success');
             updateStatus('communication-status', true);
         }
 
