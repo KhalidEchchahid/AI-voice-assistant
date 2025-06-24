@@ -3,6 +3,57 @@
 import { useEffect, useState } from "react"
 import { useRoomContext } from "@livekit/components-react"
 import { RoomEvent, ConnectionState } from "livekit-client"
+// Types for DOM Monitor communication
+interface DOMMonitorRequestData {
+  type: "dom_monitor_request";
+  request_id: string;
+  request_type: "current_state" | "find_elements" | "get_stats";
+  intent?: string;
+  options?: {
+    visible?: boolean;
+    interactable?: boolean;
+    max_elements?: number;
+  };
+  timestamp: number;
+}
+
+interface DOMMonitorResponseData {
+  type: "dom_monitor_response";
+  request_id: string;
+  success: boolean;
+  data?: {
+    elements?: Array<{
+      elementId: string;
+      tagName: string;
+      text: string;
+      role: string;
+      position: { x: number; y: number; width: number; height: number };
+      visibility: boolean;
+      interactable: boolean;
+    }>;
+    stats?: {
+      totalElements: number;
+      visibleElements: number;
+      interactableElements: number;
+      memoryUsage: number;
+    };
+    status?: {
+      version: string;
+      initialized: boolean;
+      observing: boolean;
+    };
+    page_info?: {
+      url: string;
+      title: string;
+      domain: string;
+      timestamp: number;
+    };
+    truncated?: boolean;
+    original_count?: number;
+  };
+  error?: string;
+  timestamp: number;
+}
 
 /**
  * ActionCommandHandler listens for data messages coming from the backend (via LiveKit data channel)
@@ -75,6 +126,88 @@ export default function ActionCommandHandler() {
     } else {
       console.error("❌ Cannot send DOM Monitor response: no room connection")
       addError("Cannot send DOM response: no room connection")
+    }
+  }
+
+  // NEW: Proactive DOM state streaming
+  const startDOMStateStreaming = () => {
+    console.log("🔄 Starting proactive DOM state streaming...")
+    
+    // Stream DOM state every 3 seconds
+    const streamInterval = setInterval(() => {
+      if (room && room.localParticipant && window.AIAssistantDOMMonitor) {
+        try {
+          const domStats = window.AIAssistantDOMMonitor.getStats()
+          const allElements = window.AIAssistantDOMMonitor.getAllElements({
+            visible: true,
+            interactable: true
+          })
+          
+          const domStateMessage = {
+            type: "dom_state_update",
+            timestamp: Date.now(),
+            stats: domStats,
+            elements: allElements.slice(0, 50), // Limit to 50 most relevant elements
+            website_url: window.location.href,
+            page_title: document.title
+          }
+          
+          // Send to backend
+          room.localParticipant.publishData(
+            new TextEncoder().encode(JSON.stringify(domStateMessage)),
+            { topic: "dom_state_updates" }
+          )
+          
+          console.log(`📊 Streamed DOM state: ${allElements.length} elements`)
+        } catch (error) {
+          console.warn("⚠️ DOM state streaming error:", error)
+        }
+      }
+    }, 3000) // Every 3 seconds
+    
+    // Send immediate update on DOM changes
+    if (window.AIAssistantDOMMonitor && window.AIAssistantDOMMonitor._internal) {
+      const monitor = window.AIAssistantDOMMonitor._internal.monitor
+      const originalObserver = monitor.observer
+      
+      // Enhance observer to send immediate updates
+      if (originalObserver && originalObserver.notifyDOMChanges) {
+        const originalNotify = originalObserver.notifyDOMChanges.bind(originalObserver)
+        originalObserver.notifyDOMChanges = (changes : any) => {
+          originalNotify(changes)
+          
+          // Send immediate update for significant changes
+          if (changes.added > 0 || changes.removed > 0) {
+            setTimeout(() => {
+              if (room && room.localParticipant && window.AIAssistantDOMMonitor) {
+                const quickUpdate = {
+                  type: "dom_state_update",
+                  timestamp: Date.now(),
+                  trigger: "dom_change",
+                  stats: window.AIAssistantDOMMonitor.getStats(),
+                  elements: window.AIAssistantDOMMonitor.getAllElements({
+                    visible: true,
+                    interactable: true
+                  }).slice(0, 20)
+                }
+                
+                room.localParticipant.publishData(
+                  new TextEncoder().encode(JSON.stringify(quickUpdate)),
+                  { topic: "dom_state_updates" }
+                )
+                
+                console.log("🔄 Sent immediate DOM change update")
+              }
+            }, 500) // Small delay to let changes settle
+          }
+        }
+      }
+    }
+    
+    // Cleanup function
+    return () => {
+      clearInterval(streamInterval)
+      console.log("🛑 Stopped DOM state streaming")
     }
   }
 
@@ -161,151 +294,294 @@ export default function ActionCommandHandler() {
       updateRoomState()
     }
 
-    // Listen for ALL data messages (not just execute_actions)
-    const handleDataReceived = (
-      payload: Uint8Array,
-      participant?: any,
-      kind?: any,
-      topic?: string
-    ) => {
-      try {
-        console.log("ActionCommandHandler: Raw data received:", {
-          payloadLength: payload.length,
-          participant: participant?.identity,
-          kind,
-          topic,
-          timestamp: new Date().toISOString()
-        })
-
-        setMessageCount(prev => prev + 1)
-        // Make debug panel visible when data is received
-        setIsDebugVisible(true)
-        setIsMinimized(false)
-
-        // Decode the payload
-        const textDecoder = new TextDecoder()
-        const decodedText = textDecoder.decode(payload)
-        console.log("ActionCommandHandler: Decoded text:", decodedText)
-
-        // Try to parse as JSON
-        let parsedData: any
-        try {
-          parsedData = JSON.parse(decodedText)
-          console.log("ActionCommandHandler: Parsed JSON data:", parsedData)
-        } catch (parseError) {
-          console.log("ActionCommandHandler: Not JSON data, treating as plain text:", decodedText)
-          parsedData = { 
-            type: "text", 
-            content: decodedText,
-            topic,
-            from: participant?.identity 
-          }
-        }
-
-        // Add metadata
-        const messageWithMetadata = {
-          ...parsedData,
-          metadata: {
-            timestamp: new Date().toISOString(),
-            from: participant?.identity,
-            topic,
-            kind,
-            payloadSize: payload.length,
-            rawText: decodedText
-          }
-        }
-
-        // Add to history
-        addToHistory(messageWithMetadata, parsedData?.type || "unknown")
-
-        // Update debug state with last received message
-        setLastDataMessage(messageWithMetadata)
-
-        // Check message type and handle accordingly
-        if (parsedData && parsedData.type === "dom_monitor_request") {
-          console.log("ActionCommandHandler: DOM Monitor request received:", parsedData)
-          
-          // Forward DOM Monitor request to parent window
-          const domRequestMessage = {
-            action: "dom_monitor_request",
-            payload: parsedData,
-            type: "dom_monitor_request",
-            request_id: parsedData.request_id,
-            intent: parsedData.intent,
-            options: parsedData.options,
-            metadata: {
-              timestamp: new Date().toISOString(),
-              source: "voice_assistant_backend",
-            },
-          }
-
-          console.log("ActionCommandHandler: Forwarding DOM Monitor request to parent:", domRequestMessage)
-          window.parent.postMessage(domRequestMessage, "*")
-          
-          // Add to history
-          setLastDataMessage({...messageWithMetadata, forwarded_as_dom_request: true})
-        } 
-        // Check if this is an execute_actions message
-        else if (parsedData && parsedData.type === "execute_actions" && Array.isArray(parsedData.actions)) {
-          console.log("ActionCommandHandler: Execute actions message received:", parsedData)
-          console.log("🎯 ACTION DETAILS:", {
-            actionsCount: parsedData.actions.length,
-            actions: parsedData.actions.map((action: any, index: number) => ({
-              index,
-              action: action.action,
-              selector: action.selector,
-              xpath: action.xpath,
-              value: action.value,
-              text: action.text,
-              options: action.options,
-              id: action.id,
-              command_id: action.command_id
-            })),
-            website_id: parsedData.website_id,
-            user_intent: parsedData.user_intent
-          })
-          
-          setLastActionMessage(parsedData)
-
-          // Post message to parent window
-          const messageToParent = {
-            action: "execute_actions",
-            payload: parsedData.actions,
-            type: "execute_actions",
-            actions: parsedData.actions,
-            metadata: {
-              website_id: parsedData.website_id,
-              user_intent: parsedData.user_intent,
-              timestamp: new Date().toISOString(),
-              source: "voice_assistant_backend",
-            },
-          }
-
-          console.log("ActionCommandHandler: Posting message to parent:", messageToParent)
-          window.parent.postMessage(messageToParent, "*")
-        } else {
-          console.log("ActionCommandHandler: Non-action message received:", {
-            type: parsedData?.type,
-            hasActions: Array.isArray(parsedData?.actions),
-            actionCount: parsedData?.actions?.length,
-            keys: Object.keys(parsedData || {})
-          })
-        }
-
-      } catch (error) {
-        const errorMsg = `Failed to process data message: ${error}`
-        addError(errorMsg)
-        console.error("ActionCommandHandler: Error processing data:", error, {
-          payloadLength: payload.length,
-          participant: participant?.identity,
-          topic
-        })
+    // Start DOM state streaming when connected
+    let stopDOMStreaming: (() => void) | null = null
+    if (room.state === ConnectionState.Connected) {
+      stopDOMStreaming = startDOMStateStreaming()
+    }
+    
+    // Start streaming when connection is established
+    const originalHandler = handleConnectionStateChanged
+    const enhancedConnectionHandler = (state: ConnectionState) => {
+      originalHandler(state)
+      
+      if (state === ConnectionState.Connected && !stopDOMStreaming) {
+        console.log("🚀 Room connected - starting DOM state streaming")
+        stopDOMStreaming = startDOMStateStreaming()
+      } else if (state !== ConnectionState.Connected && stopDOMStreaming) {
+        console.log("🛑 Room disconnected - stopping DOM state streaming")
+        stopDOMStreaming()
+        stopDOMStreaming = null
       }
     }
 
+      // Enhanced data received handler following LiveKit documentation
+  const handleDataReceived = (
+    payload: Uint8Array,
+    participant?: any,
+    kind?: any,
+    topic?: string
+  ) => {
+    try {
+      console.log("ActionCommandHandler: LiveKit data received:", {
+        payloadLength: payload.length,
+        participant: participant?.identity,
+        kind,
+        topic,
+        timestamp: new Date().toISOString()
+      })
+
+      setMessageCount(prev => prev + 1)
+      // Make debug panel visible when data is received
+      setIsDebugVisible(true)
+      setIsMinimized(false)
+
+      // Decode following LiveKit documentation
+      const textDecoder = new TextDecoder()
+      const decodedText = textDecoder.decode(payload)
+      console.log("ActionCommandHandler: Decoded LiveKit message:", decodedText.slice(0, 200) + "...")
+
+      // Parse JSON data
+      let parsedData: any
+      try {
+        parsedData = JSON.parse(decodedText)
+        console.log("ActionCommandHandler: Parsed LiveKit data:", {
+          type: parsedData?.type,
+          topic,
+          size: payload.length
+        })
+      } catch (parseError) {
+        console.log("ActionCommandHandler: Invalid JSON in LiveKit message:", decodedText)
+        parsedData = { 
+          type: "text", 
+          content: decodedText,
+          topic,
+          from: participant?.identity 
+        }
+      }
+
+      // Add metadata for debugging
+      const messageWithMetadata = {
+        ...parsedData,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          from: participant?.identity,
+          topic,
+          kind,
+          payloadSize: payload.length,
+          rawText: decodedText
+        }
+      }
+
+      // Add to debug history
+      addToHistory(messageWithMetadata, parsedData?.type || "unknown")
+      setLastDataMessage(messageWithMetadata)
+
+      // Handle DOM Monitor requests (following our protocol)
+      if (topic === "dom_monitor_requests" && parsedData?.type === "dom_monitor_request") {
+        console.log("📥 DOM Monitor request from assistant via LiveKit:", parsedData)
+        handleDOMMonitorRequest(parsedData)
+      } 
+      // Handle action execution commands
+      else if (parsedData?.type === "execute_actions" && Array.isArray(parsedData.actions)) {
+        console.log("🎯 Execute actions received via LiveKit:", parsedData)
+        handleExecuteActions(parsedData)
+      } 
+      // Log other message types
+      else {
+        console.log("📨 Other LiveKit message received:", {
+          type: parsedData?.type,
+          topic,
+          hasActions: Array.isArray(parsedData?.actions),
+          keys: Object.keys(parsedData || {})
+        })
+      }
+
+    } catch (error) {
+      const errorMsg = `Failed to process LiveKit data: ${error}`
+      addError(errorMsg)
+      console.error("ActionCommandHandler: Error processing LiveKit data:", error, {
+        payloadLength: payload.length,
+        participant: participant?.identity,
+        topic
+      })
+    }
+  }
+
+  // Handle DOM Monitor requests via postMessage to parent window
+  const handleDOMMonitorRequest = async (request: any) => {
+    try {
+      const { request_id, request_type, intent, options } = request
+      
+      console.log(`🔍 Processing DOM request via postMessage: ${request_id} (${request_type})`)
+      
+      // Create request for parent window
+      const domRequest: DOMMonitorRequestData = {
+        type: "dom_monitor_request",
+        request_id,
+        request_type,
+        intent,
+        options: options || {},
+        timestamp: Date.now()
+      }
+      
+      // Send request to parent window via postMessage (where DOM Monitor lives)
+      window.parent.postMessage({
+        action: "dom_monitor_request",
+        payload: domRequest,
+        type: "dom_monitor_request",
+        request_id,
+        intent,
+        options: domRequest.options,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: "voice_assistant_iframe",
+        },
+      }, "*")
+      
+      console.log(`📤 DOM request sent to parent window: ${request_id}`)
+      
+      // Add to debug history
+      addToHistory({
+        type: "dom_monitor_request_sent",
+        request_id,
+        request_type,
+        intent,
+        success: true
+      }, "dom_request_sent")
+      
+      // Note: Response will be handled by window message listener
+      
+    } catch (error: any) {
+      console.error("❌ Error handling DOM request:", error)
+      await sendDOMResponse({
+        type: "dom_monitor_response",
+        request_id: request.request_id,
+        success: false,
+        error: error?.message || String(error),
+        timestamp: Date.now()
+      })
+      addError(`DOM request processing failed: ${error}`)
+    }
+  }
+
+  // Send DOM response following LiveKit size limits and reliability
+  const sendDOMResponse = async (responseData: any) => {
+    if (!room || !room.localParticipant) {
+      console.error("❌ No LiveKit room for DOM response")
+      addError("No LiveKit room connection for DOM response")
+      return
+    }
+    
+    try {
+      const responseJson = JSON.stringify(responseData)
+      const responseBytes = new TextEncoder().encode(responseJson)
+      
+      // Check LiveKit size limit (15KiB for reliable delivery per documentation)
+      const MAX_RELIABLE_SIZE = 15360 // 15KiB
+      
+      if (responseBytes.length > MAX_RELIABLE_SIZE) {
+        console.warn("⚠️ DOM response exceeds LiveKit limit, truncating...", {
+          originalSize: responseBytes.length,
+          limit: MAX_RELIABLE_SIZE
+        })
+        
+        // Truncate elements array if present
+        if (responseData.data?.elements) {
+          const maxElements = Math.floor(responseData.data.elements.length * 0.7)
+          responseData.data.elements = responseData.data.elements.slice(0, maxElements)
+          responseData.data.truncated = true
+          responseData.data.original_count = responseData.data.elements.length
+          
+          const truncatedJson = JSON.stringify(responseData)
+          const truncatedBytes = new TextEncoder().encode(truncatedJson)
+          
+          if (truncatedBytes.length <= MAX_RELIABLE_SIZE) {
+            await room.localParticipant.publishData(
+              truncatedBytes,
+              { topic: "dom_monitor_responses", reliable: true }
+            )
+            console.log(`📤 Truncated DOM response sent: ${truncatedBytes.length} bytes`)
+            return
+          }
+        }
+        
+        // Last resort: send error about size
+        const errorResponse = {
+          type: "dom_monitor_response",
+          request_id: responseData.request_id,
+          success: false,
+          error: "Response too large for LiveKit transmission",
+          size_limit: MAX_RELIABLE_SIZE,
+          actual_size: responseBytes.length
+        }
+        
+        await room.localParticipant.publishData(
+          new TextEncoder().encode(JSON.stringify(errorResponse)),
+          { topic: "dom_monitor_responses", reliable: true }
+        )
+        
+        console.error(`❌ DOM response too large: ${responseBytes.length} > ${MAX_RELIABLE_SIZE}`)
+        addError(`DOM response too large: ${responseBytes.length} bytes`)
+        
+      } else {
+        // Send normal response with reliable delivery
+        await room.localParticipant.publishData(
+          responseBytes,
+          { topic: "dom_monitor_responses", reliable: true }
+        )
+        console.log(`📤 DOM response sent via LiveKit: ${responseBytes.length} bytes`)
+      }
+      
+    } catch (error) {
+      console.error("❌ Error sending DOM response via LiveKit:", error)
+      addError(`DOM response send failed: ${error}`)
+    }
+  }
+
+  // Handle action execution (existing functionality)
+  const handleExecuteActions = (actionData: any) => {
+    try {
+      console.log("🎯 Execute actions received:", {
+        actionsCount: actionData.actions.length,
+        sequential: actionData.sequential_mode,
+        fallback: actionData.fallback_mode,
+        website_id: actionData.website_id,
+        user_intent: actionData.user_intent
+      })
+      
+      // Forward to parent window (existing pattern)
+      const messageToParent = {
+        action: "execute_actions",
+        payload: actionData.actions,
+        type: "execute_actions",
+        actions: actionData.actions,
+        metadata: {
+          website_id: actionData.website_id,
+          user_intent: actionData.user_intent,
+          timestamp: new Date().toISOString(),
+          source: "voice_assistant_backend",
+          sequential_mode: actionData.sequential_mode || false,
+          fallback_mode: actionData.fallback_mode || false
+        },
+      }
+
+      console.log("📤 Forwarding actions to parent window:", messageToParent)
+      window.parent.postMessage(messageToParent, "*")
+      
+      // Update debug state
+      setLastActionMessage(actionData)
+      addToHistory(actionData, "execute_actions")
+      
+    } catch (error) {
+      console.error("❌ Error handling execute actions:", error)
+      addError(`Action execution handling failed: ${error}`)
+    }
+  }
+
     // Attach event listeners
     room.on(RoomEvent.DataReceived, handleDataReceived)
-    room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged)
+    room.on(RoomEvent.ConnectionStateChanged, enhancedConnectionHandler)
 
     console.log("ActionCommandHandler: Event listeners attached", {
       timestamp: new Date().toISOString(),
@@ -316,16 +592,42 @@ export default function ActionCommandHandler() {
     const handleWindowMessage = (event: MessageEvent) => {
       try {
         const data = event.data
-        if (data && data.type === "dom_monitor_response") {
+        
+        // Handle DOM Monitor response from parent window
+        if (data && data.action === "dom_monitor_response") {
           console.log("📥 Received DOM Monitor response from parent:", data)
           
+          // Convert parent response to LiveKit format and send back to backend
+          const livekitResponse: DOMMonitorResponseData = {
+            type: "dom_monitor_response",
+            request_id: data.requestId || data.request_id,
+            success: data.success || false,
+            data: data.data,
+            error: data.error,
+            timestamp: Date.now()
+          }
+          
+          sendDOMResponse(livekitResponse)
+          
+          // Add to debug history
+          addToHistory({
+            type: "dom_monitor_response_received",
+            request_id: data.requestId || data.request_id,
+            success: data.success,
+            elements_found: data.data?.elements?.length || 0
+          }, "dom_monitor_response")
+        }
+        // Handle legacy format for backward compatibility
+        else if (data && data.type === "dom_monitor_response") {
+          console.log("📥 Received legacy DOM Monitor response from parent:", data)
+          
           // Send response back to backend via LiveKit
-          sendDomMonitorResponse(data)
+          sendDOMResponse(data as DOMMonitorResponseData)
           
           // Add to debug history
           addToHistory(data, "dom_monitor_response")
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("❌ Error handling window message:", error)
         addError(`Window message error: ${error}`)
       }
@@ -341,7 +643,7 @@ export default function ActionCommandHandler() {
         reason: "Component unmounting or room changed"
       })
       room.off(RoomEvent.DataReceived, handleDataReceived)
-      room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged)
+      room.off(RoomEvent.ConnectionStateChanged, enhancedConnectionHandler)
       window.removeEventListener('message', handleWindowMessage)
     }
   }, [room])
