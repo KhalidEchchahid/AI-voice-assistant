@@ -45,13 +45,40 @@
 
     getElementText(element) {
       // Extract meaningful text content
-      if (element.getAttribute('aria-label')) return element.getAttribute('aria-label')
-      if (element.getAttribute('title')) return element.getAttribute('title')
-      if (element.getAttribute('placeholder')) return element.getAttribute('placeholder')
-      if (element.value && element.type !== 'password') return element.value
+      let text = '';
+      let source = '';
       
-      const text = element.textContent || element.innerText || ''
-      return text.trim().slice(0, 100) // Limit text length
+      if (element.getAttribute('aria-label')) {
+        text = element.getAttribute('aria-label');
+        source = 'aria-label';
+      } else if (element.getAttribute('title')) {
+        text = element.getAttribute('title');
+        source = 'title';
+      } else if (element.getAttribute('placeholder')) {
+        text = element.getAttribute('placeholder');
+        source = 'placeholder';
+      } else if (element.value && element.type !== 'password') {
+        text = element.value;
+        source = 'value';
+      } else {
+        text = element.textContent || element.innerText || '';
+        source = 'textContent';
+      }
+      
+      const finalText = text.trim().slice(0, 100); // Limit text length
+      
+      // CONSOLE LOG: Show text extraction details
+      if (finalText) {
+        console.log("📝 DOM Monitor: Text extracted:", {
+          element: element.tagName.toLowerCase() + (element.id ? `#${element.id}` : ''),
+          text: finalText,
+          source: source,
+          originalLength: text.length,
+          truncated: text.length > 100
+        });
+      }
+      
+      return finalText;
     }
 
     getElementRole(element) {
@@ -222,7 +249,7 @@
       const now = Date.now()
       const elementId = this.generateElementId(element)
       
-      return {
+      const elementData = {
         id: elementId,
         element: element,
         tagName: element.tagName.toLowerCase(),
@@ -238,6 +265,21 @@
         firstSeen: now,
         updateCount: 1
       }
+      
+      // CONSOLE LOG: Show detailed element data being extracted
+      console.log("🔍 DOM Monitor: Extracting element data:", {
+        id: elementId,
+        tag: elementData.tagName,
+        text: elementData.text,
+        role: elementData.role,
+        visible: elementData.visibility,
+        interactable: elementData.interactable,
+        position: `${elementData.position.x},${elementData.position.y} (${elementData.position.width}x${elementData.position.height})`,
+        selectors: elementData.selectors.map(s => `${s.type}: ${s.value}`),
+        attributes: elementData.attributes
+      })
+      
+      return elementData
     }
 
     getRelevantAttributes(element) {
@@ -271,7 +313,14 @@
     }
 
     addElement(element) {
-      if (!this.isRelevantElement(element)) return null
+      if (!this.isRelevantElement(element)) {
+        console.log("⏭️ DOM Monitor: Skipping irrelevant element:", {
+          tag: element.tagName.toLowerCase(),
+          id: element.id || 'none',
+          reason: 'not interactive'
+        });
+        return null;
+      }
       
       const elementId = this.generateElementId(element)
       const existing = this.cache.get(elementId)
@@ -284,11 +333,25 @@
         existing.visibility = this.checkVisibility(element)
         existing.interactable = this.checkInteractability(element)
         this.updateAccessCount(elementId)
+        
+        console.log("🔄 DOM Monitor: Updated existing element:", {
+          id: elementId.slice(0, 20) + '...',
+          tag: element.tagName.toLowerCase(),
+          text: existing.text.slice(0, 30),
+          updateCount: existing.updateCount,
+          visible: existing.visibility,
+          interactable: existing.interactable
+        });
+        
         return elementId
       }
       
       // Check cache size and cleanup if needed
       if (this.cache.size >= this.maxSize) {
+        console.log("🧹 DOM Monitor: Cache full, evicting elements...", {
+          currentSize: this.cache.size,
+          maxSize: this.maxSize
+        });
         this.evictLeastRecentlyUsed()
       }
       
@@ -296,6 +359,16 @@
       this.cache.set(elementId, data)
       this.updateSearchIndexes(elementId, data)
       this.updateAccessCount(elementId)
+      
+      console.log("➕ DOM Monitor: Added new element to cache:", {
+        id: elementId.slice(0, 20) + '...',
+        tag: data.tagName,
+        text: data.text.slice(0, 30),
+        role: data.role,
+        visible: data.visibility,
+        interactable: data.interactable,
+        cacheSize: this.cache.size
+      });
       
       return elementId
     }
@@ -410,19 +483,34 @@
     }
 
     findByIntent(intent) {
+      console.log("🔍 DOM Monitor: Starting intent search:", { intent });
+      
       const intentLower = intent.toLowerCase()
       const results = new Map()
       
       // Text-based search
       const words = intentLower.split(/\s+/).filter(word => word.length > 2)
+      console.log("🔍 DOM Monitor: Search words extracted:", words);
+      
       for (const word of words) {
         for (const [indexedWord, elementIds] of this.textIndex.entries()) {
           if (indexedWord.includes(word) || word.includes(indexedWord)) {
+            console.log("🔍 DOM Monitor: Text match found:", { 
+              searchWord: word, 
+              indexedWord: indexedWord, 
+              elementCount: elementIds.size 
+            });
+            
             for (const elementId of elementIds) {
               const element = this.cache.get(elementId)
               if (element && element.visibility && element.interactable) {
                 const score = this.calculateTextScore(word, indexedWord)
                 this.addToResults(results, elementId, score, 'text')
+                console.log("🎯 DOM Monitor: Added text match:", {
+                  elementId: elementId.slice(0, 20) + '...',
+                  text: element.text.slice(0, 30),
+                  score: score
+                });
               }
             }
           }
@@ -441,14 +529,27 @@
       
       for (const [action, roles] of Object.entries(roleKeywords)) {
         if (intentLower.includes(action)) {
+          console.log("🔍 DOM Monitor: Role-based search triggered:", { action, roles });
+          
           for (const role of roles) {
             const elementIds = this.roleIndex.get(role)
             if (elementIds) {
+              console.log("🔍 DOM Monitor: Role match found:", { 
+                role: role, 
+                elementCount: elementIds.size 
+              });
+              
               for (const elementId of elementIds) {
                 const element = this.cache.get(elementId)
                 if (element && element.visibility && element.interactable) {
                   const score = 0.8
                   this.addToResults(results, elementId, score, 'role')
+                  console.log("🎯 DOM Monitor: Added role match:", {
+                    elementId: elementId.slice(0, 20) + '...',
+                    role: role,
+                    text: element.text.slice(0, 30),
+                    score: score
+                  });
                 }
               }
             }
@@ -457,9 +558,21 @@
       }
       
       // Convert to array and sort by score
-      return Array.from(results.values())
+      const finalResults = Array.from(results.values())
         .sort((a, b) => b.totalScore - a.totalScore)
-        .slice(0, 10)
+        .slice(0, 10);
+      
+      console.log("✅ DOM Monitor: Search completed:", {
+        intent: intent,
+        totalResults: finalResults.length,
+        topResults: finalResults.slice(0, 3).map(r => ({
+          text: r.element.text.slice(0, 30),
+          score: r.totalScore,
+          confidence: r.confidence
+        }))
+      });
+      
+      return finalResults;
     }
 
     calculateTextScore(searchWord, indexedWord) {
@@ -625,22 +738,45 @@
     }
 
     observeExistingElements() {
+      console.log("🔍 DOM Monitor: Starting initial element discovery...");
+      
       const selectors = [
         'button', 'a[href]', 'input', 'select', 'textarea', 'form',
         '[onclick]', '[role="button"]', '[role="link"]', '[tabindex]',
         '.btn', '.button', '.link', '.clickable'
       ]
       
+      console.log("🔍 DOM Monitor: Using selectors:", selectors);
+      
       const elements = document.querySelectorAll(selectors.join(','))
+      let addedCount = 0;
+      let skippedCount = 0;
+      
+      console.log("🔍 DOM Monitor: Found potential elements:", elements.length);
       
       for (const element of elements) {
         const elementId = this.cache.addElement(element)
-        if (elementId && this.intersectionObserver) {
-          this.intersectionObserver.observe(element)
+        if (elementId) {
+          addedCount++;
+          if (this.intersectionObserver) {
+            this.intersectionObserver.observe(element)
+          }
+        } else {
+          skippedCount++;
         }
       }
       
-      console.log(`🔄 DOM Monitor: Initial scan found ${elements.length} interactive elements`)
+      console.log(`✅ DOM Monitor: Initial scan completed:`, {
+        totalFound: elements.length,
+        added: addedCount,
+        skipped: skippedCount,
+        cacheSize: this.cache.cache.size,
+        indexSizes: {
+          text: this.cache.textIndex.size,
+          role: this.cache.roleIndex.size,
+          selector: this.cache.selectorIndex.size
+        }
+      });
     }
 
     handleMutations(mutations) {
@@ -879,31 +1015,47 @@
     }
 
     async init() {
-      if (this.isInitialized) return
+      if (this.isInitialized) {
+        console.log("⏭️ DOM Monitor: Already initialized, skipping...");
+        return;
+      }
       
-      console.log("🔄 DOM Monitor: Initializing Live DOM Monitor system...")
+      console.log("🚀 DOM Monitor: Starting initialization process...");
       
       try {
         // Wait for DOM to be ready
+        console.log("⏳ DOM Monitor: Waiting for DOM to be ready...");
         await this.waitForDOM()
+        console.log("✅ DOM Monitor: DOM is ready");
         
         // Start observing
+        console.log("👁️ DOM Monitor: Starting element observation...");
         this.observer.startWatching()
         
         // Setup cleanup routine
+        console.log("🧹 DOM Monitor: Setting up cleanup routine...");
         this.startCleanupRoutine()
         
         // Send initialization complete message
+        const stats = this.cache.getStats();
+        console.log("📊 DOM Monitor: Initial stats:", stats);
+        
         this.bridge.sendUpdate('INITIALIZED', {
           version: MONITOR_VERSION,
-          stats: this.cache.getStats()
+          stats: stats
         })
         
         this.isInitialized = true
-        console.log("✅ DOM Monitor: Live DOM Monitor ready")
+        this.initTime = Date.now();
+        
+        console.log("🎉 DOM Monitor: Initialization completed successfully!", {
+          version: MONITOR_VERSION,
+          stats: stats,
+          timestamp: new Date().toISOString()
+        });
         
       } catch (error) {
-        console.error("❌ DOM Monitor: Initialization failed:", error)
+        console.error("💥 DOM Monitor: Initialization failed:", error)
         throw error
       }
     }
@@ -999,7 +1151,24 @@
 
     startCleanupRoutine() {
       this.cleanupInterval = setInterval(() => {
-        this.cache.cleanup()
+        const statsBefore = this.cache.getStats();
+        console.log("🧹 DOM Monitor: Running periodic cleanup...", {
+          cacheSize: statsBefore.totalElements,
+          memoryUsage: statsBefore.memoryUsage + 'KB'
+        });
+        
+        this.cache.cleanup();
+        
+        const statsAfter = this.cache.getStats();
+        const removed = statsBefore.totalElements - statsAfter.totalElements;
+        
+        if (removed > 0) {
+          console.log("✅ DOM Monitor: Cleanup completed:", {
+            elementsRemoved: removed,
+            cacheSize: statsAfter.totalElements,
+            memoryUsage: statsAfter.memoryUsage + 'KB'
+          });
+        }
       }, CLEANUP_INTERVAL)
     }
 
@@ -1037,12 +1206,17 @@
   // Initialize the monitor
   const monitor = new LiveDOMMonitor()
   
+  console.log("🔄 DOM Monitor: Script loaded, setting up auto-initialization...");
+  
   // Auto-initialize when DOM is ready
   if (document.readyState === 'loading') {
+    console.log("📄 DOM Monitor: DOM still loading, waiting for DOMContentLoaded...");
     document.addEventListener('DOMContentLoaded', () => {
+      console.log("📄 DOM Monitor: DOMContentLoaded fired, initializing...");
       monitor.init().catch(console.error)
     })
   } else {
+    console.log("📄 DOM Monitor: DOM already ready, initializing immediately...");
     monitor.init().catch(console.error)
   }
 
@@ -1052,38 +1226,96 @@
     
     // Main API methods
     findElements: (intent, options = {}) => safeExecute(() => {
+      console.log("🔍 DOM Monitor API: findElements called:", { intent, options });
       const matches = monitor.cache.findByIntent(intent)
-      return monitor.validateElements(matches)
+      const validatedMatches = monitor.validateElements(matches)
+      console.log("✅ DOM Monitor API: findElements result:", {
+        intent: intent,
+        totalMatches: matches.length,
+        validatedMatches: validatedMatches.length,
+        topMatch: validatedMatches[0] ? {
+          text: validatedMatches[0].element.text.slice(0, 30),
+          confidence: validatedMatches[0].confidence
+        } : null
+      });
+      return validatedMatches;
     }, "findElements"),
     
     getAllElements: (filter = {}) => safeExecute(() => {
-      return monitor.cache.getAllElements(filter)
+      console.log("📋 DOM Monitor API: getAllElements called:", { filter });
+      const elements = monitor.cache.getAllElements(filter);
+      console.log("✅ DOM Monitor API: getAllElements result:", {
+        totalElements: elements.length,
+        filter: filter,
+        sample: elements.slice(0, 3).map(el => ({
+          text: el.text.slice(0, 20),
+          tag: el.tagName,
+          role: el.role
+        }))
+      });
+      return elements;
     }, "getAllElements"),
     
     getElementBySelector: (selector) => safeExecute(() => {
+      console.log("🎯 DOM Monitor API: getElementBySelector called:", { selector });
       const elements = monitor.cache.getAllElements()
-      return elements.find(el => 
+      const element = elements.find(el => 
         el.selectors.some(s => s.value === selector)
-      )
+      );
+      console.log("✅ DOM Monitor API: getElementBySelector result:", {
+        selector: selector,
+        found: !!element,
+        element: element ? {
+          text: element.text.slice(0, 30),
+          tag: element.tagName,
+          role: element.role
+        } : null
+      });
+      return element;
     }, "getElementBySelector"),
     
     // Status and stats
-    getStats: () => monitor.cache.getStats(),
-    getStatus: () => monitor.getStatus(),
+    getStats: () => {
+      const stats = monitor.cache.getStats();
+      console.log("📊 DOM Monitor API: getStats called - result:", stats);
+      return stats;
+    },
+    
+    getStatus: () => {
+      const status = monitor.getStatus();
+      console.log("🔧 DOM Monitor API: getStatus called - result:", status);
+      return status;
+    },
     
     // Control methods
     refresh: () => safeExecute(() => {
+      console.log("🔄 DOM Monitor API: refresh called");
       monitor.observer.observeExistingElements()
-      return { success: true, message: "Cache refreshed" }
+      const result = { success: true, message: "Cache refreshed" };
+      console.log("✅ DOM Monitor API: refresh completed:", result);
+      return result;
     }, "refresh"),
     
     cleanup: () => safeExecute(() => {
-      monitor.cache.cleanup()
-      return { success: true, message: "Cache cleaned up" }
+      console.log("🧹 DOM Monitor API: cleanup called");
+      const sizeBefore = monitor.cache.cache.size;
+      monitor.cache.cleanup();
+      const sizeAfter = monitor.cache.cache.size;
+      const result = { 
+        success: true, 
+        message: "Cache cleaned up",
+        removedElements: sizeBefore - sizeAfter
+      };
+      console.log("✅ DOM Monitor API: cleanup completed:", result);
+      return result;
     }, "cleanup"),
     
     // Utility methods
-    isReady: () => monitor.isInitialized,
+    isReady: () => {
+      const ready = monitor.isInitialized;
+      console.log("❓ DOM Monitor API: isReady called - result:", ready);
+      return ready;
+    },
     
     // For debugging
     _internal: {
@@ -1095,4 +1327,13 @@
   }
 
   console.log(`✅ AI Assistant Live DOM Monitor: Initialization complete (v${MONITOR_VERSION})`)
+  
+  console.log("🎯 DOM Monitor: Script fully loaded and ready!", {
+    version: MONITOR_VERSION,
+    loadTime: Date.now(),
+    readyState: document.readyState,
+    userAgent: navigator.userAgent.slice(0, 50) + '...',
+    timestamp: new Date().toISOString()
+  });
+  
 })() 
