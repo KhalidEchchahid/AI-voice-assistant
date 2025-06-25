@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AccessToken } from 'livekit-server-sdk'
-// RoomAgentDispatch and RoomConfiguration removed - not needed for automatic dispatch
+import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol'
+import type { AccessTokenOptions, VideoGrant } from 'livekit-server-sdk'
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,18 +35,19 @@ export async function POST(request: NextRequest) {
     const userIdentity = identity || `user_${Math.random().toString(36).substr(2, 9)}`
     const userName = name || 'Voice Assistant User'
     const roomName = room || 'voice-assistant-room'
-    // Note: No specific agentName needed for automatic dispatch
+    const finalAgentName = agentName || 'voice-assistant-agent' // Use provided or default agent name
     
     console.log('🎯 Token generation configuration:', {
       roomName,
       userIdentity,
       userName,
-      dispatchMode: 'AUTOMATIC',
+      agentName: finalAgentName,
+      dispatchMode: 'EXPLICIT',
       wsUrl: wsUrl.replace(/\/+$/, ''), // Remove trailing slashes
       timestamp: new Date().toISOString()
     })
 
-    const token = new AccessToken(apiKey, apiSecret, {
+    const userInfo: AccessTokenOptions = {
       identity: userIdentity,
       name: userName,
       metadata: JSON.stringify({ 
@@ -54,34 +56,47 @@ export async function POST(request: NextRequest) {
         timestamp: Date.now(),
         source: 'next-api-route'
       }),
-    })
+    }
 
-    // Grant comprehensive permissions
-    token.addGrant({
+    const grant: VideoGrant = {
       room: roomName,
       roomJoin: true,
       canPublish: true,
       canSubscribe: true,
       canPublishData: true,
       canUpdateOwnMetadata: true,
-    })
+    }
 
-    // AUTOMATIC DISPATCH MODE: Agent automatically dispatched to new rooms
-    // No explicit agent dispatch configuration needed
+    const token = new AccessToken(apiKey, apiSecret, userInfo)
+    token.addGrant(grant)
 
-    console.log('🔧 Automatic dispatch mode enabled:', {
-      dispatchMode: 'AUTOMATIC',
-      note: 'Agent will be automatically dispatched to room'
-    })
+    // EXPLICIT DISPATCH MODE: Configure room with specific agent
+    if (finalAgentName) {
+      token.roomConfig = new RoomConfiguration({
+        agents: [
+          new RoomAgentDispatch({
+            agentName: finalAgentName,
+            metadata: JSON.stringify({ user_id: userIdentity }),
+          }),
+        ],
+      })
+      
+      console.log('🔧 Explicit agent dispatch configured:', {
+        agentName: finalAgentName,
+        dispatchMode: 'EXPLICIT',
+        roomConfig: 'configured'
+      })
+    }
 
     // Generate the token
     const jwt = await token.toJwt()
 
-    console.log('✅ Successfully generated LiveKit token with automatic dispatch:', { 
+    console.log('✅ Successfully generated LiveKit token with explicit dispatch:', { 
       room: roomName, 
       identity: userIdentity, 
       name: userName,
-      dispatchMode: 'AUTOMATIC',
+      agentName: finalAgentName,
+      dispatchMode: 'EXPLICIT',
       tokenLength: jwt.length,
       jwtPreview: jwt.substring(0, 50) + '...'
     })
@@ -91,11 +106,13 @@ export async function POST(request: NextRequest) {
       wsUrl: wsUrl.replace(/\/+$/, ''), // Clean URL
       room: roomName,
       identity: userIdentity,
-      dispatchMode: 'AUTOMATIC',
+      agentName: finalAgentName,
+      dispatchMode: 'EXPLICIT',
       debug: {
         timestamp: new Date().toISOString(),
         tokenGenerated: true,
-        automaticDispatchEnabled: true
+        explicitDispatchEnabled: true,
+        roomConfigSet: !!token.roomConfig
       }
     })
 
