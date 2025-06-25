@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AccessToken } from 'livekit-server-sdk'
-import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol'
+// Removed RoomAgentDispatch and RoomConfiguration for automatic dispatch
+// import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     // Create access token with proper identity and metadata
     const userIdentity = identity || `user_${Math.random().toString(36).substr(2, 9)}`
     const userName = name || 'Voice Assistant User'
-    const defaultAgentName = agentName || 'voice-assistant-agent'
+    const roomName = room || 'voice-assistant-room'
     
     const token = new AccessToken(apiKey, apiSecret, {
       identity: userIdentity,
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     // Grant permissions (including canUpdateOwnMetadata like playground)
     token.addGrant({
-      room: room || 'voice-assistant-room',
+      room: roomName,
       roomJoin: true,
       canPublish: true,
       canSubscribe: true,
@@ -40,36 +41,26 @@ export async function POST(request: NextRequest) {
       canUpdateOwnMetadata: true,
     })
 
-    // FIXED: Enable agent dispatch configuration - this is critical!
-    token.roomConfig = new RoomConfiguration({
-      agents: [
-        new RoomAgentDispatch({
-          agentName: defaultAgentName,
-          metadata: JSON.stringify({ 
-            user_id: userIdentity,
-            room: room || 'voice-assistant-room',
-            timestamp: Date.now()
-          }),
-        }),
-      ],
-    })
-
+    // REMOVED: Agent dispatch configuration for automatic dispatch mode
+    // For automatic dispatch, agents will join automatically when room is created
+    // No need to configure RoomAgentDispatch
+    
     // Generate the token
     const jwt = await token.toJwt()
 
-    console.log('Generated LiveKit token with agent dispatch for:', { 
-      room: room || 'voice-assistant-room', 
+    console.log('Generated LiveKit token for automatic agent dispatch:', { 
+      room: roomName, 
       identity: userIdentity, 
       name: userName,
-      agentName: defaultAgentName
+      mode: 'automatic_dispatch'
     })
 
     return NextResponse.json({
       token: jwt,
       wsUrl: wsUrl,
-      room: room || 'voice-assistant-room',
+      room: roomName,
       identity: userIdentity,
-      agentName: defaultAgentName,
+      mode: 'automatic_dispatch',
     })
 
   } catch (error) {
