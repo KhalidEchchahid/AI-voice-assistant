@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AccessToken } from 'livekit-server-sdk'
-// Removed RoomAgentDispatch and RoomConfiguration for automatic dispatch
-// import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol'
+import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +12,11 @@ export async function POST(request: NextRequest) {
     const wsUrl = process.env.LIVEKIT_URL
 
     if (!apiKey || !apiSecret || !wsUrl) {
-      console.error('Missing LiveKit environment variables')
+      console.error('Missing LiveKit environment variables', {
+        hasApiKey: !!apiKey,
+        hasApiSecret: !!apiSecret,
+        hasWsUrl: !!wsUrl
+      })
       return NextResponse.json(
         { error: 'LiveKit configuration missing' },
         { status: 500 }
@@ -24,14 +27,27 @@ export async function POST(request: NextRequest) {
     const userIdentity = identity || `user_${Math.random().toString(36).substr(2, 9)}`
     const userName = name || 'Voice Assistant User'
     const roomName = room || 'voice-assistant-room'
+    const defaultAgentName = 'voice-assistant-agent' // This must match your entrypoint.py
     
+    console.log('Generating token with configuration:', {
+      roomName,
+      userIdentity,
+      userName,
+      agentName: defaultAgentName,
+      wsUrl: wsUrl.replace(/\/+$/, '') // Remove trailing slashes
+    })
+
     const token = new AccessToken(apiKey, apiSecret, {
       identity: userIdentity,
       name: userName,
-      metadata: JSON.stringify({ user_id: userIdentity }),
+      metadata: JSON.stringify({ 
+        user_id: userIdentity,
+        room: roomName,
+        timestamp: Date.now()
+      }),
     })
 
-    // Grant permissions (including canUpdateOwnMetadata like playground)
+    // Grant comprehensive permissions
     token.addGrant({
       room: roomName,
       roomJoin: true,
@@ -41,32 +57,46 @@ export async function POST(request: NextRequest) {
       canUpdateOwnMetadata: true,
     })
 
-    // REMOVED: Agent dispatch configuration for automatic dispatch mode
-    // For automatic dispatch, agents will join automatically when room is created
-    // No need to configure RoomAgentDispatch
-    
+    // FIXED: Enable explicit agent dispatch - this ensures reliable agent joining
+    // This configuration dispatches the agent when the participant connects
+    token.roomConfig = new RoomConfiguration({
+      agents: [
+        new RoomAgentDispatch({
+          agentName: defaultAgentName,
+          metadata: JSON.stringify({ 
+            user_id: userIdentity,
+            room: roomName,
+            timestamp: Date.now(),
+            source: 'web-widget'
+          }),
+        }),
+      ],
+    })
+
     // Generate the token
     const jwt = await token.toJwt()
 
-    console.log('Generated LiveKit token for automatic agent dispatch:', { 
+    console.log('✅ Successfully generated LiveKit token with agent dispatch:', { 
       room: roomName, 
       identity: userIdentity, 
       name: userName,
-      mode: 'automatic_dispatch'
+      agentName: defaultAgentName,
+      tokenLength: jwt.length
     })
 
     return NextResponse.json({
       token: jwt,
-      wsUrl: wsUrl,
+      wsUrl: wsUrl.replace(/\/+$/, ''), // Clean URL
       room: roomName,
       identity: userIdentity,
-      mode: 'automatic_dispatch',
+      agentName: defaultAgentName,
+      mode: 'explicit_dispatch'
     })
 
   } catch (error) {
-    console.error('Error generating LiveKit token:', error)
+    console.error('❌ Error generating LiveKit token:', error)
     return NextResponse.json(
-      { error: 'Failed to generate token' },
+      { error: 'Failed to generate token', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }
