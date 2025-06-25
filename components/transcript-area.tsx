@@ -2,7 +2,8 @@
 
 import { useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
-import { Bot, User } from "lucide-react"
+import { Bot, User, Sparkles } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 // Define the Message type here since we're not importing it
 export type Message = {
@@ -29,13 +30,41 @@ export default function TranscriptArea({ messages }: TranscriptAreaProps) {
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Bot className="w-8 h-8 text-gray-400" />
+      <div className="flex-1 flex items-center justify-center p-8 relative">
+        {/* Animated background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-cyan-500/5 animate-pulse" />
+
+        {/* Floating particles effect */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-violet-400/30 rounded-full animate-float"
+              style={{
+                left: `${20 + i * 15}%`,
+                top: `${30 + (i % 3) * 20}%`,
+                animationDelay: `${i * 0.5}s`,
+                animationDuration: `${3 + i * 0.5}s`,
+              }}
+            />
+          ))}
+        </div>
+
+        <div className="text-center relative z-10">
+          <div className="relative mb-6">
+            <div className="w-20 h-20 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center mx-auto shadow-2xl shadow-violet-500/25">
+              <Bot className="w-10 h-10 text-white" />
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-400/20 to-purple-500/20 animate-pulse" />
+            </div>
+            <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-violet-400 animate-bounce" />
           </div>
-          <h3 className="text-lg font-medium text-gray-300 mb-2">AI Voice Assistant</h3>
-          <p className="text-sm text-gray-500">Connect to the agent and start speaking to see your conversation here</p>
+          <h3 className="text-2xl font-bold bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent mb-3">
+            AI Voice Assistant
+          </h3>
+          <p className="text-sm text-muted-foreground/80 max-w-md mx-auto leading-relaxed">
+            Connect to the agent and start speaking to see your conversation here. Experience the future of AI
+            communication.
+          </p>
         </div>
       </div>
     )
@@ -43,79 +72,109 @@ export default function TranscriptArea({ messages }: TranscriptAreaProps) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Chat Header */}
-      <div className="p-4 border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-            <Bot className="w-5 h-5 text-white" />
+      {/* Enhanced Chat Header */}
+      <div className="p-4 border-b border-border/50 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative overflow-hidden">
+        {/* Animated background pattern */}
+        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 via-transparent to-cyan-500/5" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
+
+        <div className="flex items-center justify-between relative z-10">
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-violet-500/25">
+                <Bot className="w-6 h-6 text-white" />
+              </div>
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-400/30 to-purple-500/30 animate-pulse" />
+              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-background animate-pulse" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-foreground text-lg">AI Voice Assistant</h2>
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                Live conversation
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-medium text-gray-200">AI Voice Assistant</h2>
-            <p className="text-xs text-gray-400">Live conversation</p>
-          </div>
+
+          <ThemeToggle />
         </div>
       </div>
 
-      {/* Messages */}
-      <div 
-        ref={containerRef} 
-        className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth bg-gray-950/20 backdrop-blur-sm"
-        style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 #1f2937' }}
+      {/* Enhanced Messages */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth bg-gradient-to-b from-background/50 to-background/80 backdrop-blur-sm relative"
+        style={{ scrollbarWidth: "thin" }}
       >
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(120,119,198,0.05),transparent_50%)] pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(34,197,94,0.05),transparent_50%)] pointer-events-none" />
+
         {messages.map((message, index) => (
-        <div
-          key={message.id}
-          className={cn(
-              "flex items-start space-x-3",
-              message.role === "user" ? "flex-row-reverse space-x-reverse" : ""
+          <div
+            key={message.id}
+            className={cn(
+              "flex items-start space-x-4 animate-in slide-in-from-bottom-2 duration-500",
+              message.role === "user" ? "flex-row-reverse space-x-reverse" : "",
+              "group",
             )}
+            style={{ animationDelay: `${index * 50}ms` }}
           >
-            {/* Avatar */}
+            {/* Enhanced Avatar */}
             <div
               className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                message.role === "user" 
-                  ? "bg-green-600" 
-                  : "bg-blue-600"
+                "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg relative transition-all duration-300 group-hover:scale-105",
+                message.role === "user"
+                  ? "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/25"
+                  : "bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/25",
               )}
             >
               {message.role === "user" ? (
-                <User className="w-4 h-4 text-white" />
+                <User className="w-5 h-5 text-white" />
               ) : (
-                <Bot className="w-4 h-4 text-white" />
+                <Bot className="w-5 h-5 text-white" />
               )}
+              <div className="absolute inset-0 rounded-full bg-white/20 animate-pulse opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             </div>
 
-            {/* Message bubble */}
+            {/* Enhanced Message bubble */}
             <div
               className={cn(
-                "max-w-[75%] rounded-2xl px-4 py-3 relative",
+                "max-w-[75%] rounded-2xl px-5 py-4 relative backdrop-blur-sm transition-all duration-300 group-hover:shadow-lg",
                 message.role === "user"
-                  ? "bg-green-600 text-white rounded-tr-md"
-                  : "bg-gray-800 text-gray-100 rounded-tl-md border border-gray-700"
-          )}
-        >
-              {/* Message content */}
-              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                {message.content}
-              </p>
-
-              {/* Timestamp */}
+                  ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-tr-md shadow-lg shadow-emerald-500/20"
+                  : "bg-gradient-to-br from-card/80 to-card/60 text-card-foreground rounded-tl-md border border-border/50 shadow-lg",
+              )}
+            >
+              {/* Subtle inner glow */}
               <div
                 className={cn(
-                  "text-xs mt-1 opacity-70",
-                  message.role === "user" ? "text-green-100" : "text-gray-400"
+                  "absolute inset-0 rounded-2xl opacity-50",
+                  message.role === "user"
+                    ? "bg-gradient-to-br from-white/10 to-transparent"
+                    : "bg-gradient-to-br from-violet-500/5 to-transparent",
+                )}
+              />
+
+              {/* Message content */}
+              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words relative z-10">{message.content}</p>
+
+              {/* Enhanced Timestamp */}
+              <div
+                className={cn(
+                  "text-xs mt-2 opacity-70 relative z-10 flex items-center gap-1",
+                  message.role === "user" ? "text-emerald-100" : "text-muted-foreground",
                 )}
               >
-                {message.timestamp 
-                  ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                }
+                <div className="w-1 h-1 rounded-full bg-current opacity-50" />
+                {message.timestamp
+                  ? new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                  : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </div>
             </div>
-        </div>
-      ))}
-      <div ref={messagesEndRef} />
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
       </div>
     </div>
   )

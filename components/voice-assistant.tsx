@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
-import { 
-  LiveKitRoom, 
-  RoomAudioRenderer, 
+import {
+  LiveKitRoom,
+  RoomAudioRenderer,
   StartAudio,
   useVoiceAssistant,
   useLocalParticipant,
@@ -11,21 +11,13 @@ import {
   useChat,
   useConnectionState,
   useTracks,
-  VideoTrack
+  VideoTrack,
 } from "@livekit/components-react"
-import { 
-  ConnectionState, 
-  Track, 
-  TranscriptionSegment, 
-  LocalParticipant,
-  Participant,
-  createLocalAudioTrack
-} from "livekit-client"
+import { ConnectionState, Track, type TranscriptionSegment, LocalParticipant, type Participant } from "livekit-client"
 import StatusDisplay from "@/components/status-display"
 import VisualFeedback from "@/components/visual-feedback"
 import TranscriptArea from "@/components/transcript-area"
-import { Button } from "@/components/ui/button"
-import { Phone, PhoneOff, Loader2, Mic, MicOff, Camera, CameraOff, AlertCircle } from "lucide-react"
+import { Phone, PhoneOff, Loader2, Mic, Camera, CameraOff, AlertCircle, Sparkles } from "lucide-react"
 import type { Message } from "@/components/transcript-area"
 import ActionCommandHandler from "@/components/action-command-handler"
 
@@ -33,26 +25,26 @@ import ActionCommandHandler from "@/components/action-command-handler"
 function segmentToChatMessage(
   segment: TranscriptionSegment,
   existingMessage: Message | undefined,
-  participant: Participant
+  participant: Participant,
 ): Message {
   const isLocal = participant instanceof LocalParticipant
-  
+
   return {
     id: `transcript-${segment.id}`,
     role: isLocal ? "user" : "assistant",
     content: segment.final ? segment.text : `${segment.text} ...`, // Show real-time with ...
-    timestamp: existingMessage?.timestamp ?? Date.now() // Preserve original timestamp
+    timestamp: existingMessage?.timestamp ?? Date.now(), // Preserve original timestamp
   }
 }
 
 // Inner component that uses LiveKit hooks
-function VoiceAssistantInner({ 
-  onMessagesUpdate, 
-  isCameraEnabled, 
+function VoiceAssistantInner({
+  onMessagesUpdate,
+  isCameraEnabled,
   onCameraToggle,
   onError,
-  onConnectionStateChange
-}: { 
+  onConnectionStateChange,
+}: {
   onMessagesUpdate?: (messages: Message[]) => void
   isCameraEnabled?: boolean
   onCameraToggle?: () => void
@@ -62,17 +54,15 @@ function VoiceAssistantInner({
   const connectionState = useConnectionState()
   const localParticipant = useLocalParticipant()
   const voiceAssistant = useVoiceAssistant()
-  
+
   // Get all tracks
   const tracks = useTracks()
-  
+
   // Find local camera track
   const localCameraTrack = tracks.find(
-    (trackRef) => 
-      trackRef.source === Track.Source.Camera && 
-      trackRef.participant instanceof LocalParticipant
+    (trackRef) => trackRef.source === Track.Source.Camera && trackRef.participant instanceof LocalParticipant,
   )
-  
+
   // Get transcription segments from both local and agent tracks (exactly like playground)
   const agentMessages = useTrackTranscription(voiceAssistant.audioTrack || undefined)
   const localMessages = useTrackTranscription({
@@ -80,7 +70,7 @@ function VoiceAssistantInner({
     source: Track.Source.Microphone,
     participant: localParticipant.localParticipant,
   })
-  
+
   const { chatMessages } = useChat()
 
   // Store transcripts using Map like in playground for proper real-time updates
@@ -104,33 +94,18 @@ function VoiceAssistantInner({
     // Process agent transcripts (AI responses)
     if (voiceAssistant.audioTrack) {
       agentMessages.segments.forEach((s) =>
-        transcripts.set(
-          s.id,
-          segmentToChatMessage(
-            s,
-            transcripts.get(s.id),
-            voiceAssistant.audioTrack!.participant,
-          ),
-        ),
+        transcripts.set(s.id, segmentToChatMessage(s, transcripts.get(s.id), voiceAssistant.audioTrack!.participant)),
       )
     }
 
     // Process local transcripts (user speech) - this is the key part!
     localMessages.segments.forEach((s) =>
-      transcripts.set(
-        s.id,
-        segmentToChatMessage(
-          s,
-          transcripts.get(s.id),
-          localParticipant.localParticipant,
-        ),
-      ),
+      transcripts.set(s.id, segmentToChatMessage(s, transcripts.get(s.id), localParticipant.localParticipant)),
     )
 
-    
     // Combine with chat messages (fallback)
     const allMessages = Array.from(transcripts.values())
-    
+
     for (const msg of chatMessages) {
       const isAgent = voiceAssistant.audioTrack
         ? msg.from?.identity === voiceAssistant.audioTrack.participant?.identity
@@ -141,22 +116,22 @@ function VoiceAssistantInner({
         id: `chat-${msg.timestamp}-${Math.random()}`,
         role: isSelf ? "user" : "assistant",
         content: msg.message,
-        timestamp: msg.timestamp
+        timestamp: msg.timestamp,
       })
     }
 
     // Sort by timestamp for proper chronological order
     allMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-    
+
     setMessages(allMessages)
-    
+
     // Update parent component with messages for persistence
     onMessagesUpdate?.(allMessages)
-    
+
     console.log("Playground-style transcript processing:", {
       agentSegments: agentMessages.segments.length,
       localSegments: localMessages.segments.length,
-      totalMessages: allMessages.length
+      totalMessages: allMessages.length,
     })
   }, [
     transcripts,
@@ -185,11 +160,11 @@ function VoiceAssistantInner({
   const currentState = useMemo(() => {
     if (connectionState === ConnectionState.Connecting) return "connecting"
     if (connectionState !== ConnectionState.Connected) return "idle"
-    
+
     if (voiceAssistant.state === "listening") return "listening"
     if (voiceAssistant.state === "thinking") return "processing"
     if (voiceAssistant.state === "speaking") return "speaking"
-    
+
     return "idle"
   }, [connectionState, voiceAssistant.state])
 
@@ -210,15 +185,12 @@ function VoiceAssistantInner({
 
   return (
     <>
-      {/* Background Video */}
+      {/* Enhanced Background Video */}
       {isCameraActive && localCameraTrack && (
         <div className="absolute inset-0 z-0">
-          <VideoTrack
-            trackRef={localCameraTrack}
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-          {/* Overlay to ensure text readability */}
-          <div className="absolute inset-0 bg-black/50"></div>
+          <VideoTrack trackRef={localCameraTrack} className="absolute inset-0 w-full h-full object-cover" />
+          {/* Enhanced overlay with gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 backdrop-blur-[1px]"></div>
         </div>
       )}
 
@@ -227,64 +199,67 @@ function VoiceAssistantInner({
         <TranscriptArea messages={messages} />
       </div>
 
-      {/* Status Area */}
-      <div className="p-4 border-t border-gray-800 bg-gray-900/50 backdrop-blur-sm relative z-10">
-        <div className="flex flex-col items-center space-y-3">
+      {/* Enhanced Status Area */}
+      <div className="p-6 border-t border-border/50 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative z-10 overflow-hidden">
+        {/* Animated background */}
+        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 via-transparent to-cyan-500/5" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_70%)]" />
 
+        <div className="flex flex-col items-center space-y-4 relative z-10">
           {/* Status Display */}
-          <StatusDisplay 
-            state={currentState as any} 
-            transcript="" 
-            visionActive={false} 
-          />
+          <StatusDisplay state={currentState as any} transcript="" visionActive={false} />
 
-          {/* Visual Feedback */}
+          {/* Enhanced Visual Feedback */}
           {(currentState === "speaking" || currentState === "listening") && (
-            <VisualFeedback 
-              trackRef={voiceAssistant.audioTrack}
-              state={voiceAssistant.state}
-            />
+            <div className="p-4 rounded-full bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/20 backdrop-blur-sm">
+              <VisualFeedback trackRef={voiceAssistant.audioTrack} state={voiceAssistant.state} />
+            </div>
           )}
 
-          {/* Connection indicators */}
+          {/* Enhanced Connection indicators */}
           {isConnected && (
-            <div className="flex items-center space-x-4 text-xs">
-              <div className="text-green-400 flex items-center">
-                <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-                Room Connected
+            <div className="flex flex-wrap items-center justify-center gap-3 text-xs">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-sm">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                <span className="text-emerald-400 font-medium">Room Connected</span>
               </div>
+
               {isAgentConnected && (
-                <div className="text-blue-400 flex items-center">
-                  <span className="w-2 h-2 bg-blue-400 rounded-full mr-2"></span>
-                  Agent Ready
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 backdrop-blur-sm">
+                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+                  <span className="text-blue-400 font-medium">Agent Ready</span>
                 </div>
               )}
+
               {currentState === "listening" && (
-                <div className="text-yellow-400 flex items-center">
-                  <span className="animate-pulse mr-1">🎤</span>
-                  Listening
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 backdrop-blur-sm">
+                  <Mic className="w-3 h-3 text-amber-400 animate-pulse" />
+                  <span className="text-amber-400 font-medium">Listening</span>
                 </div>
               )}
+
               {currentState === "processing" && (
-                <div className="text-orange-400 flex items-center">
-                  <span className="animate-spin mr-1">⚙️</span>
-                  Processing
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 backdrop-blur-sm">
+                  <Loader2 className="w-3 h-3 text-orange-400 animate-spin" />
+                  <span className="text-orange-400 font-medium">Processing</span>
                 </div>
               )}
+
               {currentState === "speaking" && (
-                <div className="text-purple-400 flex items-center">
-                  <span className="animate-pulse mr-1">🔊</span>
-                  Speaking
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 backdrop-blur-sm">
+                  <Sparkles className="w-3 h-3 text-purple-400 animate-pulse" />
+                  <span className="text-purple-400 font-medium">Speaking</span>
                 </div>
               )}
+
               {isCameraActive && (
-                <div className="text-cyan-400 flex items-center">
-                  <span className="mr-1">📹</span>
-                  Camera Active
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 backdrop-blur-sm">
+                  <Camera className="w-3 h-3 text-cyan-400" />
+                  <span className="text-cyan-400 font-medium">Camera Active</span>
                 </div>
               )}
-          </div>
-        )}
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -304,7 +279,7 @@ export default function VoiceAssistant() {
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected)
   const [retryCount, setRetryCount] = useState<number>(0)
   const [lastConnectionAttempt, setLastConnectionAttempt] = useState<number>(0)
-  
+
   // Ref to track if we're currently connecting to prevent duplicate requests
   const connectingRef = useRef<boolean>(false)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>()
@@ -318,85 +293,87 @@ export default function VoiceAssistant() {
   }, [])
 
   // Enhanced token generation with retry logic
-  const generateToken = useCallback(async (isRetry: boolean = false): Promise<{ token: string; wsUrl: string } | null> => {
-    if (connectingRef.current && !isRetry) {
-      console.log('🔄 Already connecting, skipping duplicate request')
-      return null
-    }
-
-    try {
-      connectingRef.current = true
-      setIsLoading(true)
-      setError(null)
-      
-      console.log('🔄 Generating LiveKit token...', { 
-        isRetry, 
-        retryCount,
-        timestamp: Date.now() 
-      })
-
-      const response = await fetch('/api/livekit-token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          room: `voice-assistant-room-${Date.now()}`, // Unique room for each session
-          identity: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          name: 'Voice Assistant User',
-          dispatchMode: 'auto', // Use auto dispatch mode
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const responseData = await response.json()
-      const { token: newToken, wsUrl: newWsUrl } = responseData
-      
-      console.log('✅ Token generated successfully', {
-        hasToken: !!newToken,
-        hasWsUrl: !!newWsUrl,
-        wsUrl: newWsUrl,
-        tokenLength: newToken?.length || 0,
-        timestamp: Date.now(),
-        fullResponse: responseData
-      })
-
-      setRetryCount(0) // Reset retry count on success
-      return { token: newToken, wsUrl: newWsUrl }
-
-    } catch (err) {
-      console.error('❌ Failed to generate token:', err)
-      const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
-      
-      // Check for specific error types
-      if (errorMessage.includes('Invalid key') || errorMessage.includes('invalid API key')) {
-        setError('Invalid LiveKit credentials. Check your environment variables.')
-        setRetryCount(0) // Don't retry on auth errors
+  const generateToken = useCallback(
+    async (isRetry = false): Promise<{ token: string; wsUrl: string } | null> => {
+      if (connectingRef.current && !isRetry) {
+        console.log("🔄 Already connecting, skipping duplicate request")
         return null
       }
-      
-      setError(errorMessage)
-      throw err
-    } finally {
-      connectingRef.current = false
-      setIsLoading(false)
-    }
-  }, [retryCount])
+
+      try {
+        connectingRef.current = true
+        setIsLoading(true)
+        setError(null)
+
+        console.log("🔄 Generating LiveKit token...", {
+          isRetry,
+          retryCount,
+          timestamp: Date.now(),
+        })
+
+        const response = await fetch("/api/livekit-token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            room: `voice-assistant-room-${Date.now()}`, // Unique room for each session
+            identity: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            name: "Voice Assistant User",
+            dispatchMode: "auto", // Use auto dispatch mode
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+        }
+
+        const responseData = await response.json()
+        const { token: newToken, wsUrl: newWsUrl } = responseData
+
+        console.log("✅ Token generated successfully", {
+          hasToken: !!newToken,
+          hasWsUrl: !!newWsUrl,
+          wsUrl: newWsUrl,
+          tokenLength: newToken?.length || 0,
+          timestamp: Date.now(),
+          fullResponse: responseData,
+        })
+
+        setRetryCount(0) // Reset retry count on success
+        return { token: newToken, wsUrl: newWsUrl }
+      } catch (err) {
+        console.error("❌ Failed to generate token:", err)
+        const errorMessage = err instanceof Error ? err.message : "Failed to connect"
+
+        // Check for specific error types
+        if (errorMessage.includes("Invalid key") || errorMessage.includes("invalid API key")) {
+          setError("Invalid LiveKit credentials. Check your environment variables.")
+          setRetryCount(0) // Don't retry on auth errors
+          return null
+        }
+
+        setError(errorMessage)
+        throw err
+      } finally {
+        connectingRef.current = false
+        setIsLoading(false)
+      }
+    },
+    [retryCount],
+  )
 
   // Handle connection - simplified without retry loop
   const handleConnect = useCallback(async () => {
     const now = Date.now()
-    
+
     // Prevent rapid successive connection attempts
     if (now - lastConnectionAttempt < 2000) {
-      console.log('🔄 Rate limiting connection attempts')
+      console.log("🔄 Rate limiting connection attempts")
       return
     }
-    
+
     setLastConnectionAttempt(now)
     clearReconnectTimeout()
 
@@ -405,22 +382,21 @@ export default function VoiceAssistant() {
       if (!result) return
 
       const { token: newToken, wsUrl: newWsUrl } = result
-      
+
       // Clear any existing connection state
       if (shouldConnect) {
         setShouldConnect(false)
-        await new Promise(resolve => setTimeout(resolve, 500)) // Brief pause
+        await new Promise((resolve) => setTimeout(resolve, 500)) // Brief pause
       }
-      
+
       setWsUrl(newWsUrl)
       setToken(newToken)
       setShouldConnect(true)
-      
-      console.log('🔄 Initiating connection...', { wsUrl: newWsUrl, hasToken: !!newToken })
 
+      console.log("🔄 Initiating connection...", { wsUrl: newWsUrl, hasToken: !!newToken })
     } catch (err) {
-      console.error('❌ Connection failed:', err)
-      const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
+      console.error("❌ Connection failed:", err)
+      const errorMessage = err instanceof Error ? err.message : "Failed to connect"
       setError(errorMessage)
       setShouldConnect(false)
       // REMOVED RETRY LOGIC - User must manually retry
@@ -429,57 +405,60 @@ export default function VoiceAssistant() {
 
   // Handle disconnect with proper cleanup
   const handleDisconnect = useCallback(async () => {
-    console.log('🔄 Disconnecting...')
+    console.log("🔄 Disconnecting...")
     clearReconnectTimeout()
     setShouldConnect(false)
     setError(null)
     setRetryCount(0)
-    
+
     // Allow some time for graceful disconnect
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
     // Clear tokens to force regeneration on reconnect
     setWsUrl("")
     setToken("")
     connectingRef.current = false
-    
-    console.log('✅ Disconnected and cleaned up')
+
+    console.log("✅ Disconnected and cleaned up")
   }, [clearReconnectTimeout])
 
   // Handle connection state changes
-  const handleConnectionStateChange = useCallback((state: ConnectionState) => {
-    setConnectionState(state)
-    console.log('🔄 Connection state changed:', state)
-    
-    switch (state) {
-      case ConnectionState.Connected:
-        setHasEverConnected(true)
-        setError(null)
-        setRetryCount(0)
-        setIsLoading(false)
-        clearReconnectTimeout()
-        break
-        
-      case ConnectionState.Disconnected:
-        // REMOVED AUTO-RETRY LOOP - Let user manually retry
-        console.log('🔄 Disconnected - manual reconnection required')
-        break
-        
-      case ConnectionState.Reconnecting:
-        setError(null)
-        break
-    }
-  }, [clearReconnectTimeout])
+  const handleConnectionStateChange = useCallback(
+    (state: ConnectionState) => {
+      setConnectionState(state)
+      console.log("🔄 Connection state changed:", state)
+
+      switch (state) {
+        case ConnectionState.Connected:
+          setHasEverConnected(true)
+          setError(null)
+          setRetryCount(0)
+          setIsLoading(false)
+          clearReconnectTimeout()
+          break
+
+        case ConnectionState.Disconnected:
+          // REMOVED AUTO-RETRY LOOP - Let user manually retry
+          console.log("🔄 Disconnected - manual reconnection required")
+          break
+
+        case ConnectionState.Reconnecting:
+          setError(null)
+          break
+      }
+    },
+    [clearReconnectTimeout],
+  )
 
   // Handle errors from the inner component
   const handleError = useCallback((errorMessage: string) => {
-    console.error('🚨 Voice Assistant Error:', errorMessage)
+    console.error("🚨 Voice Assistant Error:", errorMessage)
     setError(errorMessage)
   }, [])
 
   // Toggle camera function
   const toggleCamera = useCallback(() => {
-    setIsCameraEnabled(prev => !prev)
+    setIsCameraEnabled((prev) => !prev)
   }, [])
 
   // Cleanup on unmount
@@ -493,7 +472,12 @@ export default function VoiceAssistant() {
   // Show initial connection screen only if never connected
   if (!hasEverConnected && (!shouldConnect || !wsUrl || !token)) {
     return (
-      <div className="flex flex-col h-full bg-gray-950 text-gray-100 border border-gray-800 rounded-lg overflow-hidden relative">
+      <div className="flex flex-col h-full bg-gradient-to-br from-background via-background/95 to-background border border-border/50 rounded-xl overflow-hidden relative backdrop-blur-sm">
+        {/* Animated background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-cyan-500/5 animate-pulse" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_70%,rgba(120,119,198,0.1),transparent_50%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(34,197,94,0.1),transparent_50%)]" />
+
         {/* Camera Preview (if enabled) */}
         {isCameraEnabled && (
           <div className="absolute inset-0 z-0">
@@ -501,57 +485,82 @@ export default function VoiceAssistant() {
               autoPlay
               playsInline
               muted
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover rounded-xl"
               ref={(video) => {
                 if (video && isCameraEnabled) {
-                  navigator.mediaDevices.getUserMedia({ video: true })
-                    .then(stream => {
+                  navigator.mediaDevices
+                    .getUserMedia({ video: true })
+                    .then((stream) => {
                       video.srcObject = stream
                     })
                     .catch(console.error)
                 }
               }}
             />
-            <div className="absolute inset-0 bg-black/60"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 backdrop-blur-[1px] rounded-xl"></div>
           </div>
         )}
 
-        <div className="flex-1 flex items-center justify-center relative z-10">
+        <div className="flex-1 flex items-center justify-center relative z-10 p-8">
           <div className="text-center max-w-md">
-            <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              🎤
+            {/* Enhanced logo/icon */}
+            <div className="relative mb-8">
+              <div className="w-24 h-24 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center mx-auto shadow-2xl shadow-violet-500/25 relative">
+                <Sparkles className="w-12 h-12 text-white" />
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse" />
+              </div>
+              {/* Floating particles */}
+              <div className="absolute inset-0 pointer-events-none">
+                {[...Array(3)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="absolute w-2 h-2 bg-violet-400/40 rounded-full animate-float"
+                    style={{
+                      left: `${30 + i * 20}%`,
+                      top: `${20 + i * 15}%`,
+                      animationDelay: `${i * 0.7}s`,
+                      animationDuration: `${2 + i * 0.5}s`,
+                    }}
+                  />
+                ))}
+              </div>
             </div>
-            <h3 className="text-lg font-medium text-gray-300 mb-2">AI Voice Assistant</h3>
-            <p className="text-sm text-gray-500 mb-6">Connect to start your conversation</p>
-            
-            <div className="flex flex-col items-center space-y-2">
+
+            <h3 className="text-3xl font-bold bg-gradient-to-r from-violet-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent mb-4">
+              AI Voice Assistant
+            </h3>
+            <p className="text-muted-foreground mb-8 leading-relaxed">
+              Connect to start your conversation with the future of AI communication
+            </p>
+
+            <div className="flex flex-col items-center space-y-4">
+              {/* Enhanced connect button */}
               <button
                 onClick={handleConnect}
                 disabled={isLoading}
-                className="relative w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
+                className="group relative w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-500 shadow-2xl shadow-emerald-500/25 hover:shadow-emerald-500/40 transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
               >
-                <div className="absolute inset-0 rounded-full bg-white/20 animate-pulse"></div>
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-transparent to-black/10" />
                 <div className="relative z-10 flex items-center justify-center h-full">
                   {isLoading ? (
-                    <Loader2 className="h-6 w-6 text-white animate-spin" />
+                    <Loader2 className="h-8 w-8 text-white animate-spin" />
                   ) : (
-                    <Phone className="h-6 w-6 text-white" />
+                    <Phone className="h-8 w-8 text-white group-hover:scale-110 transition-transform duration-300" />
                   )}
                 </div>
+                {/* Ripple effect */}
+                <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping opacity-0 group-hover:opacity-100" />
               </button>
 
               {error && (
-                <div className="text-xs text-red-400 text-center max-w-xs mt-2 p-2 bg-red-900/20 rounded border border-red-800">
-                  <div className="flex items-center justify-center mb-1">
-                    <AlertCircle className="h-3 w-3 mr-1" />
-                    Connection Error
+                <div className="text-xs text-red-400 text-center max-w-xs p-4 bg-red-500/10 border border-red-500/20 rounded-lg backdrop-blur-sm">
+                  <div className="flex items-center justify-center mb-2">
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    <span className="font-medium">Connection Error</span>
                   </div>
-                  <div className="text-center">{error}</div>
-                  {retryCount > 0 && (
-                    <div className="text-gray-400 mt-1">
-                      Retry {retryCount}/3...
-                    </div>
-                  )}
+                  <div className="text-center leading-relaxed">{error}</div>
+                  {retryCount > 0 && <div className="text-red-300 mt-2 text-xs">Retry {retryCount}/3...</div>}
                 </div>
               )}
             </div>
@@ -564,7 +573,10 @@ export default function VoiceAssistant() {
   // If we've connected before but are currently disconnected, show the chat interface with history
   if (hasEverConnected && (!shouldConnect || !wsUrl || !token)) {
     return (
-      <div className="flex flex-col h-full bg-gray-950 text-gray-100 border border-gray-800 rounded-lg overflow-hidden relative">
+      <div className="flex flex-col h-full bg-gradient-to-br from-background via-background/95 to-background border border-border/50 rounded-xl overflow-hidden relative backdrop-blur-sm">
+        {/* Animated background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-cyan-500/5" />
+
         {/* Camera Preview (if enabled) */}
         {isCameraEnabled && (
           <div className="absolute inset-0 z-0">
@@ -572,18 +584,19 @@ export default function VoiceAssistant() {
               autoPlay
               playsInline
               muted
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover rounded-xl"
               ref={(video) => {
                 if (video && isCameraEnabled) {
-                  navigator.mediaDevices.getUserMedia({ video: true })
-                    .then(stream => {
+                  navigator.mediaDevices
+                    .getUserMedia({ video: true })
+                    .then((stream) => {
                       video.srcObject = stream
                     })
                     .catch(console.error)
                 }
               }}
             />
-            <div className="absolute inset-0 bg-black/60"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 backdrop-blur-[1px] rounded-xl"></div>
           </div>
         )}
 
@@ -592,45 +605,37 @@ export default function VoiceAssistant() {
           <TranscriptArea messages={persistedMessages} />
         </div>
 
-        {/* Status Area */}
-        <div className="p-4 border-t border-gray-800 bg-gray-900/50 backdrop-blur-sm relative z-10">
-          <div className="flex flex-col items-center space-y-3">
-            <StatusDisplay 
-              state="idle" 
-              transcript="" 
-              visionActive={false} 
-            />
-            
+        {/* Enhanced Status Area */}
+        <div className="p-6 border-t border-border/50 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative z-10">
+          <div className="flex flex-col items-center space-y-4">
+            <StatusDisplay state="idle" transcript="" visionActive={false} />
+
             {/* Disconnected indicator */}
-            <div className="flex items-center space-x-4 text-xs">
-              <div className="text-red-400 flex items-center">
-                <PhoneOff className="w-3 h-3 mr-1" />
-                Call Ended
-              </div>
-              <div className="text-gray-500">
-                Click call button to reconnect
-              </div>
+            <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-red-500/10 border border-red-500/20 backdrop-blur-sm">
+              <PhoneOff className="w-4 h-4 text-red-400" />
+              <span className="text-red-400 font-medium text-sm">Call Ended</span>
+              <span className="text-muted-foreground text-xs">• Click to reconnect</span>
             </div>
           </div>
         </div>
-        
-        {/* Floating Action Buttons */}
-        <div className="absolute z-30 bottom-4 right-4 flex flex-col space-y-3">
+
+        {/* Enhanced Floating Action Buttons */}
+        <div className="absolute z-30 bottom-6 right-6 flex flex-col space-y-4">
           {/* Camera Button */}
           <button
             onClick={toggleCamera}
-            className={`relative w-12 h-12 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 ${
+            className={`group relative w-14 h-14 rounded-full transition-all duration-500 shadow-xl hover:shadow-2xl transform hover:scale-105 ${
               isCameraEnabled
-                ? "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
-                : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800"
+                ? "bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 shadow-blue-500/25 hover:shadow-blue-500/40"
+                : "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800 shadow-gray-500/25 hover:shadow-gray-500/40"
             }`}
           >
-            <div className="absolute inset-0 rounded-full bg-white/20 animate-pulse"></div>
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
             <div className="relative z-10 flex items-center justify-center h-full">
               {isCameraEnabled ? (
-                <Camera className="h-4 w-4 text-white" />
+                <Camera className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
               ) : (
-                <CameraOff className="h-4 w-4 text-white" />
+                <CameraOff className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
               )}
             </div>
           </button>
@@ -639,32 +644,29 @@ export default function VoiceAssistant() {
           <button
             onClick={handleConnect}
             disabled={isLoading}
-            className="relative w-14 h-14 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
+            className="group relative w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-500 shadow-2xl shadow-emerald-500/25 hover:shadow-emerald-500/40 transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
           >
-            <div className="absolute inset-0 rounded-full bg-white/20 animate-pulse"></div>
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
             <div className="relative z-10 flex items-center justify-center h-full">
               {isLoading ? (
-                <Loader2 className="h-5 w-5 text-white animate-spin" />
+                <Loader2 className="h-6 w-6 text-white animate-spin" />
               ) : (
-                <Phone className="h-5 w-5 text-white" />
+                <Phone className="h-6 w-6 text-white group-hover:scale-110 transition-transform duration-300" />
               )}
             </div>
+            <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping opacity-0 group-hover:opacity-100" />
           </button>
         </div>
-        
+
         {error && (
-          <div className="absolute bottom-20 right-4 max-w-xs">
-            <div className="text-xs text-red-400 bg-red-900/20 px-3 py-2 rounded border border-red-800">
-              <div className="flex items-center mb-1">
-                <AlertCircle className="h-3 w-3 mr-1" />
-                Error
+          <div className="absolute bottom-24 right-6 max-w-xs z-40">
+            <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-lg backdrop-blur-sm">
+              <div className="flex items-center mb-2">
+                <AlertCircle className="h-4 w-4 mr-2" />
+                <span className="font-medium">Error</span>
               </div>
-              {error}
-              {retryCount > 0 && (
-                <div className="text-gray-400 mt-1">
-                  Retrying... ({retryCount}/3)
-                </div>
-              )}
+              <div className="leading-relaxed">{error}</div>
+              {retryCount > 0 && <div className="text-red-300 mt-2">Retrying... ({retryCount}/3)</div>}
             </div>
           </div>
         )}
@@ -674,32 +676,34 @@ export default function VoiceAssistant() {
 
   return (
     <LiveKitRoom
-      className="flex flex-col h-full bg-gray-950 text-gray-100 border border-gray-800 rounded-lg overflow-hidden"
+      className="flex flex-col h-full bg-gradient-to-br from-background via-background/95 to-background border border-border/50 rounded-xl overflow-hidden backdrop-blur-sm"
       serverUrl={wsUrl}
       token={token}
       connect={shouldConnect}
       audio={true}
       video={false}
       onError={(e) => {
-        const errorMessage = e.message || 'Connection error'
+        const errorMessage = e.message || "Connection error"
         console.error("🚨 LiveKit Connection Error Details:", {
           message: e.message,
           error: e,
           wsUrl,
-          tokenPreview: token ? token.substring(0, 50) + '...' : 'No token',
+          tokenPreview: token ? token.substring(0, 50) + "..." : "No token",
           tokenLength: token?.length || 0,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         })
-        
+
         // Specific error handling
-        if (errorMessage.includes('invalid API key') || errorMessage.includes('Invalid key')) {
-          setError('Invalid LiveKit credentials. Please check your LIVEKIT_API_KEY and LIVEKIT_API_SECRET environment variables.')
-        } else if (errorMessage.includes('Failed to connect') || errorMessage.includes('network')) {
-          setError('Network connection failed. Please check your LIVEKIT_URL and internet connection.')
+        if (errorMessage.includes("invalid API key") || errorMessage.includes("Invalid key")) {
+          setError(
+            "Invalid LiveKit credentials. Please check your LIVEKIT_API_KEY and LIVEKIT_API_SECRET environment variables.",
+          )
+        } else if (errorMessage.includes("Failed to connect") || errorMessage.includes("network")) {
+          setError("Network connection failed. Please check your LIVEKIT_URL and internet connection.")
         } else {
           setError(errorMessage)
         }
-        
+
         handleError(errorMessage)
       }}
       onConnected={() => {
@@ -717,32 +721,32 @@ export default function VoiceAssistant() {
       <div className="flex-1 flex flex-col min-h-0 relative">
         {/* Action command bridge */}
         <ActionCommandHandler />
-        <VoiceAssistantInner 
+        <VoiceAssistantInner
           onMessagesUpdate={setPersistedMessages}
           isCameraEnabled={isCameraEnabled}
           onCameraToggle={toggleCamera}
           onError={handleError}
           onConnectionStateChange={handleConnectionStateChange}
         />
-        
-        {/* Floating Action Buttons */}
-        <div className="absolute z-30 bottom-4 right-4 flex flex-col space-y-3">
+
+        {/* Enhanced Floating Action Buttons */}
+        <div className="absolute z-30 bottom-6 right-6 flex flex-col space-y-4">
           {/* Camera Button - only show when connected */}
           {shouldConnect && connectionState === ConnectionState.Connected && (
             <button
               onClick={toggleCamera}
-              className={`relative w-12 h-12 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 ${
+              className={`group relative w-14 h-14 rounded-full transition-all duration-500 shadow-xl hover:shadow-2xl transform hover:scale-105 ${
                 isCameraEnabled
-                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
-                  : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800"
+                  ? "bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 shadow-blue-500/25 hover:shadow-blue-500/40"
+                  : "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800 shadow-gray-500/25 hover:shadow-gray-500/40"
               }`}
             >
-              <div className="absolute inset-0 rounded-full bg-white/20 animate-pulse"></div>
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
               <div className="relative z-10 flex items-center justify-center h-full">
                 {isCameraEnabled ? (
-                  <Camera className="h-4 w-4 text-white" />
+                  <Camera className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
                 ) : (
-                  <CameraOff className="h-4 w-4 text-white" />
+                  <CameraOff className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
                 )}
               </div>
             </button>
@@ -752,39 +756,36 @@ export default function VoiceAssistant() {
           <button
             onClick={shouldConnect ? handleDisconnect : handleConnect}
             disabled={isLoading}
-            className={`relative w-14 h-14 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 ${
+            className={`group relative w-16 h-16 rounded-full transition-all duration-500 shadow-2xl hover:shadow-3xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 ${
               shouldConnect
-                ? "bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600"
-                : "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
-            } ${isLoading ? "from-gray-600 to-gray-700" : ""}`}
+                ? "bg-gradient-to-br from-red-500 via-pink-500 to-rose-500 hover:from-red-600 hover:via-pink-600 hover:to-rose-600 shadow-red-500/25 hover:shadow-red-500/40"
+                : "bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 shadow-emerald-500/25 hover:shadow-emerald-500/40"
+            } ${isLoading ? "from-gray-600 to-gray-700 shadow-gray-500/25" : ""}`}
           >
-            <div className="absolute inset-0 rounded-full bg-white/20 animate-pulse"></div>
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
             <div className="relative z-10 flex items-center justify-center h-full">
               {isLoading ? (
-                <Loader2 className="h-5 w-5 text-white animate-spin" />
+                <Loader2 className="h-6 w-6 text-white animate-spin" />
               ) : shouldConnect ? (
-                <PhoneOff className="h-5 w-5 text-white" />
+                <PhoneOff className="h-6 w-6 text-white group-hover:scale-110 transition-transform duration-300" />
               ) : (
-                <Phone className="h-5 w-5 text-white" />
+                <Phone className="h-6 w-6 text-white group-hover:scale-110 transition-transform duration-300" />
               )}
             </div>
+            <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping opacity-0 group-hover:opacity-100" />
           </button>
         </div>
-        
-        {/* Error Display */}
+
+        {/* Enhanced Error Display */}
         {error && shouldConnect && (
-          <div className="absolute bottom-20 right-4 max-w-xs z-40">
-            <div className="text-xs text-red-400 bg-red-900/20 px-3 py-2 rounded border border-red-800 backdrop-blur-sm">
-              <div className="flex items-center mb-1">
-                <AlertCircle className="h-3 w-3 mr-1" />
-                Connection Error
+          <div className="absolute bottom-24 right-6 max-w-xs z-40">
+            <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-lg backdrop-blur-sm shadow-xl">
+              <div className="flex items-center mb-2">
+                <AlertCircle className="h-4 w-4 mr-2" />
+                <span className="font-medium">Connection Error</span>
               </div>
-              {error}
-              {retryCount > 0 && (
-                <div className="text-gray-400 mt-1">
-                  Retrying... ({retryCount}/3)
-                </div>
-              )}
+              <div className="leading-relaxed">{error}</div>
+              {retryCount > 0 && <div className="text-red-300 mt-2">Retrying... ({retryCount}/3)</div>}
             </div>
           </div>
         )}
