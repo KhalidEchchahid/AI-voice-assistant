@@ -15,7 +15,6 @@ import {
 } from "@livekit/components-react"
 import { ConnectionState, Track, type TranscriptionSegment, LocalParticipant, type Participant } from "livekit-client"
 import StatusDisplay from "@/components/status-display"
-import VisualFeedback from "@/components/visual-feedback"
 import TranscriptArea from "@/components/transcript-area"
 import { Phone, PhoneOff, Loader2, Camera, CameraOff, AlertCircle, Sparkles } from "lucide-react"
 import type { Message } from "@/components/transcript-area"
@@ -54,6 +53,7 @@ function VoiceAssistantInner({
   const connectionState = useConnectionState()
   const localParticipant = useLocalParticipant()
   const voiceAssistant = useVoiceAssistant()
+  const [showTranscript, setShowTranscript] = useState(true)
 
   // Get all tracks
   const tracks = useTracks()
@@ -196,26 +196,25 @@ function VoiceAssistantInner({
 
       {/* Chat Area - Takes most of the space */}
       <div className="flex-1 flex flex-col min-h-0 relative z-10">
-        <TranscriptArea messages={messages} />
+        <TranscriptArea
+          messages={messages}
+          showTranscript={showTranscript}
+          onToggleView={() => setShowTranscript(!showTranscript)}
+        />
       </div>
 
       {/* Minimal Status Area - Only shows when processing/speaking */}
-      <div className="p-3 border-t border-border/50 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative z-10 overflow-hidden">
-        {/* Animated background */}
-        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 via-transparent to-cyan-500/5" />
+      {(currentState === "processing" || currentState === "speaking") && (
+        <div className="p-3 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative z-10 overflow-hidden">
+          {/* Animated background */}
+          <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 via-transparent to-cyan-500/5" />
 
-        <div className="flex flex-col items-center space-y-2 relative z-10">
-          {/* Status Display - Only for processing/speaking */}
-          <StatusDisplay state={currentState as any} transcript="" visionActive={false} />
-
-          {/* Visual Feedback - Only when active */}
-          {(currentState === "speaking" || currentState === "listening") && (
-            <div className="p-2 rounded-full bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/20 backdrop-blur-sm">
-              <VisualFeedback trackRef={voiceAssistant.audioTrack} state={voiceAssistant.state} />
-            </div>
-          )}
+          <div className="flex flex-col items-center space-y-2 relative z-10">
+            {/* Status Display - Only for processing/speaking */}
+            <StatusDisplay state={currentState as any} transcript="" visionActive={false} />
+          </div>
         </div>
-      </div>
+      )}
     </>
   )
 }
@@ -521,12 +520,12 @@ export default function VoiceAssistant() {
           </div>
         </div>
 
-        {/* Repositioned Floating Buttons - Top Right */}
-        <div className="absolute z-30 top-4 right-4 flex space-x-2">
+        {/* Repositioned Floating Buttons - Bottom Right */}
+        <div className="absolute z-30 bottom-4 right-4 flex space-x-2">
           {/* Camera Button */}
           <button
             onClick={toggleCamera}
-            className={`group relative w-10 h-10 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 ${
+            className={`group relative w-12 h-12 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 ${
               isCameraEnabled
                 ? "bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 shadow-blue-500/25 hover:shadow-blue-500/40"
                 : "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800 shadow-gray-500/25 hover:shadow-gray-500/40"
@@ -535,9 +534,9 @@ export default function VoiceAssistant() {
             <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
             <div className="relative z-10 flex items-center justify-center h-full">
               {isCameraEnabled ? (
-                <Camera className="h-4 w-4 text-white group-hover:scale-110 transition-transform duration-300" />
+                <Camera className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
               ) : (
-                <CameraOff className="h-4 w-4 text-white group-hover:scale-110 transition-transform duration-300" />
+                <CameraOff className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
               )}
             </div>
           </button>
@@ -578,15 +577,15 @@ export default function VoiceAssistant() {
 
         {/* Chat Area with preserved messages */}
         <div className="flex-1 flex flex-col min-h-0 relative z-10">
-          <TranscriptArea messages={persistedMessages} />
+          <TranscriptArea messages={persistedMessages} showTranscript={true} onToggleView={() => {}} />
         </div>
 
-        {/* Repositioned Floating Action Buttons - Top Right */}
-        <div className="absolute z-30 top-4 right-4 flex space-x-2">
+        {/* Repositioned Floating Action Buttons - Bottom Right */}
+        <div className="absolute z-30 bottom-4 right-4 flex space-x-2">
           {/* Camera Button */}
           <button
             onClick={toggleCamera}
-            className={`group relative w-10 h-10 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 ${
+            className={`group relative w-12 h-12 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 ${
               isCameraEnabled
                 ? "bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 shadow-blue-500/25 hover:shadow-blue-500/40"
                 : "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800 shadow-gray-500/25 hover:shadow-gray-500/40"
@@ -595,9 +594,9 @@ export default function VoiceAssistant() {
             <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
             <div className="relative z-10 flex items-center justify-center h-full">
               {isCameraEnabled ? (
-                <Camera className="h-4 w-4 text-white group-hover:scale-110 transition-transform duration-300" />
+                <Camera className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
               ) : (
-                <CameraOff className="h-4 w-4 text-white group-hover:scale-110 transition-transform duration-300" />
+                <CameraOff className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
               )}
             </div>
           </button>
@@ -606,14 +605,14 @@ export default function VoiceAssistant() {
           <button
             onClick={handleConnect}
             disabled={isLoading}
-            className="group relative w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
+            className="group relative w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
           >
             <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
             <div className="relative z-10 flex items-center justify-center h-full">
               {isLoading ? (
-                <Loader2 className="h-5 w-5 text-white animate-spin" />
+                <Loader2 className="h-6 w-6 text-white animate-spin" />
               ) : (
-                <Phone className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
+                <Phone className="h-6 w-6 text-white group-hover:scale-110 transition-transform duration-300" />
               )}
             </div>
             <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping opacity-0 group-hover:opacity-100" />
@@ -621,7 +620,7 @@ export default function VoiceAssistant() {
         </div>
 
         {error && (
-          <div className="absolute bottom-4 left-4 max-w-xs z-40">
+          <div className="absolute bottom-20 left-4 max-w-xs z-40">
             <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-lg backdrop-blur-sm">
               <div className="flex items-center mb-2">
                 <AlertCircle className="h-4 w-4 mr-2" />
@@ -691,13 +690,13 @@ export default function VoiceAssistant() {
           onConnectionStateChange={handleConnectionStateChange}
         />
 
-        {/* Repositioned Floating Action Buttons - Top Right */}
-        <div className="absolute z-30 top-4 right-4 flex space-x-2">
+        {/* Repositioned Floating Action Buttons - Bottom Right */}
+        <div className="absolute z-30 bottom-4 right-4 flex space-x-2">
           {/* Camera Button - only show when connected */}
           {shouldConnect && connectionState === ConnectionState.Connected && (
             <button
               onClick={toggleCamera}
-              className={`group relative w-10 h-10 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 ${
+              className={`group relative w-12 h-12 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 ${
                 isCameraEnabled
                   ? "bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 shadow-blue-500/25 hover:shadow-blue-500/40"
                   : "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800 shadow-gray-500/25 hover:shadow-gray-500/40"
@@ -706,9 +705,9 @@ export default function VoiceAssistant() {
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
               <div className="relative z-10 flex items-center justify-center h-full">
                 {isCameraEnabled ? (
-                  <Camera className="h-4 w-4 text-white group-hover:scale-110 transition-transform duration-300" />
+                  <Camera className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
                 ) : (
-                  <CameraOff className="h-4 w-4 text-white group-hover:scale-110 transition-transform duration-300" />
+                  <CameraOff className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
                 )}
               </div>
             </button>
@@ -718,7 +717,7 @@ export default function VoiceAssistant() {
           <button
             onClick={shouldConnect ? handleDisconnect : handleConnect}
             disabled={isLoading}
-            className={`group relative w-12 h-12 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 ${
+            className={`group relative w-14 h-14 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 ${
               shouldConnect
                 ? "bg-gradient-to-br from-red-500 via-pink-500 to-rose-500 hover:from-red-600 hover:via-pink-600 hover:to-rose-600 shadow-red-500/25 hover:shadow-red-500/40"
                 : "bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 shadow-emerald-500/25 hover:shadow-emerald-500/40"
@@ -727,11 +726,11 @@ export default function VoiceAssistant() {
             <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
             <div className="relative z-10 flex items-center justify-center h-full">
               {isLoading ? (
-                <Loader2 className="h-5 w-5 text-white animate-spin" />
+                <Loader2 className="h-6 w-6 text-white animate-spin" />
               ) : shouldConnect ? (
-                <PhoneOff className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
+                <PhoneOff className="h-6 w-6 text-white group-hover:scale-110 transition-transform duration-300" />
               ) : (
-                <Phone className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
+                <Phone className="h-6 w-6 text-white group-hover:scale-110 transition-transform duration-300" />
               )}
             </div>
             <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping opacity-0 group-hover:opacity-100" />
@@ -740,7 +739,7 @@ export default function VoiceAssistant() {
 
         {/* Enhanced Error Display */}
         {error && shouldConnect && (
-          <div className="absolute bottom-4 left-4 max-w-xs z-40">
+          <div className="absolute bottom-20 left-4 max-w-xs z-40">
             <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-lg backdrop-blur-sm shadow-xl">
               <div className="flex items-center mb-2">
                 <AlertCircle className="h-4 w-4 mr-2" />
