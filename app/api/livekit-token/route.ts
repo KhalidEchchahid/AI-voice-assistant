@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AccessToken } from 'livekit-server-sdk'
-import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol'
 import type { AccessTokenOptions, VideoGrant } from 'livekit-server-sdk'
 
 export async function POST(request: NextRequest) {
   try {
-    const { room, identity, name, agentName } = await request.json()
+    // Safely parse JSON with fallback for empty bodies
+    let requestData: any = {}
+    try {
+      const body = await request.text()
+      if (body.trim()) {
+        requestData = JSON.parse(body)
+      }
+    } catch (parseError) {
+      console.warn('⚠️ Failed to parse request body, using defaults:', parseError)
+      requestData = {}
+    }
+    
+    const { room, identity, name, dispatchMode = 'auto' } = requestData
 
     // Get LiveKit credentials from environment variables
     const apiKey = process.env.LIVEKIT_API_KEY
@@ -16,6 +27,8 @@ export async function POST(request: NextRequest) {
       hasApiKey: !!apiKey,
       hasApiSecret: !!apiSecret,
       hasWsUrl: !!wsUrl,
+      apiKeyLength: apiKey?.length || 0,
+      wsUrlValue: wsUrl || 'undefined',
       nodeEnv: process.env.NODE_ENV
     })
 
@@ -26,24 +39,38 @@ export async function POST(request: NextRequest) {
         hasWsUrl: !!wsUrl
       })
       return NextResponse.json(
-        { error: 'LiveKit configuration missing - check environment variables' },
+        { 
+          error: 'LiveKit configuration missing',
+          details: {
+            apiKey: !apiKey ? 'Missing LIVEKIT_API_KEY' : 'Present',
+            apiSecret: !apiSecret ? 'Missing LIVEKIT_API_SECRET' : 'Present',
+            wsUrl: !wsUrl ? 'Missing LIVEKIT_URL' : 'Present'
+          }
+        },
         { status: 500 }
       )
     }
 
-    // Create access token with proper identity and metadata
-    const userIdentity = identity || `user_${Math.random().toString(36).substr(2, 9)}`
+    // Validate API key format (should start with API)
+    if (!apiKey.startsWith('API')) {
+      console.error('❌ Invalid API key format. API key should start with "API"')
+      return NextResponse.json(
+        { error: 'Invalid API key format' },
+        { status: 500 }
+      )
+    }
+
+    // Generate unique identifiers
+    const userIdentity = identity || `user_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`
     const userName = name || 'Voice Assistant User'
-    const roomName = room || 'voice-assistant-room'
-    const finalAgentName = agentName || 'voice-assistant-agent' // Use provided or default agent name
+    const roomName = room || `voice-assistant-room-${Date.now()}`
     
     console.log('🎯 Token generation configuration:', {
       roomName,
       userIdentity,
       userName,
-      agentName: finalAgentName,
-      dispatchMode: 'EXPLICIT',
-      wsUrl: wsUrl.replace(/\/+$/, ''), // Remove trailing slashes
+      dispatchMode,
+      wsUrl: wsUrl.replace(/\/+$/, ''),
       timestamp: new Date().toISOString()
     })
 
@@ -54,7 +81,8 @@ export async function POST(request: NextRequest) {
         user_id: userIdentity,
         room: roomName,
         timestamp: Date.now(),
-        source: 'next-api-route'
+        source: 'next-api-route',
+        dispatch_mode: dispatchMode
       }),
     }
 
@@ -70,49 +98,36 @@ export async function POST(request: NextRequest) {
     const token = new AccessToken(apiKey, apiSecret, userInfo)
     token.addGrant(grant)
 
-    // EXPLICIT DISPATCH MODE: Configure room with specific agent
-    if (finalAgentName) {
-      token.roomConfig = new RoomConfiguration({
-        agents: [
-          new RoomAgentDispatch({
-            agentName: finalAgentName,
-            metadata: JSON.stringify({ user_id: userIdentity }),
-          }),
-        ],
-      })
-      
-      console.log('🔧 Explicit agent dispatch configured:', {
-        agentName: finalAgentName,
-        dispatchMode: 'EXPLICIT',
-        roomConfig: 'configured'
-      })
+    // AUTO DISPATCH MODE: Don't set any room configuration
+    // Let the agent worker automatically pick up the room
+    if (dispatchMode === 'auto') {
+      console.log('🔧 Auto dispatch mode: No explicit agent configuration')
+      // Don't set any roomConfig for auto dispatch
     }
 
     // Generate the token
     const jwt = await token.toJwt()
 
-    console.log('✅ Successfully generated LiveKit token with explicit dispatch:', { 
+    console.log('✅ Successfully generated LiveKit token:', { 
       room: roomName, 
       identity: userIdentity, 
       name: userName,
-      agentName: finalAgentName,
-      dispatchMode: 'EXPLICIT',
+      dispatchMode,
       tokenLength: jwt.length,
-      jwtPreview: jwt.substring(0, 50) + '...'
+      jwtPreview: jwt.substring(0, 50) + '...',
+      success: true
     })
 
     return NextResponse.json({
       token: jwt,
-      wsUrl: wsUrl.replace(/\/+$/, ''), // Clean URL
+      wsUrl: wsUrl.replace(/\/+$/, ''),
       room: roomName,
       identity: userIdentity,
-      agentName: finalAgentName,
-      dispatchMode: 'EXPLICIT',
+      dispatchMode,
       debug: {
         timestamp: new Date().toISOString(),
         tokenGenerated: true,
-        explicitDispatchEnabled: true,
-        roomConfigSet: !!token.roomConfig
+        autoDispatchEnabled: dispatchMode === 'auto'
       }
     })
 
@@ -120,11 +135,28 @@ export async function POST(request: NextRequest) {
     console.error('❌ Error generating LiveKit token:', error)
     console.error('📍 Error stack trace:', (error as Error).stack)
     
+    // Check for specific error types
+    let errorMessage = 'Failed to generate token'
+    if (error instanceof Error) {
+      if (error.message.includes('Invalid key')) {
+        errorMessage = 'Invalid LiveKit API key or secret'
+      } else if (error.message.includes('network') || error.message.includes('ENOTFOUND')) {
+        errorMessage = 'Network error - check LiveKit URL'
+      } else {
+        errorMessage = error.message
+      }
+    }
+    
     return NextResponse.json(
       { 
-        error: 'Failed to generate token', 
+        error: errorMessage,
         details: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        troubleshooting: {
+          apiKey: 'Ensure LIVEKIT_API_KEY starts with "API"',
+          apiSecret: 'Ensure LIVEKIT_API_SECRET is correct',
+          url: 'Ensure LIVEKIT_URL is reachable (e.g., wss://your-livekit-server.com)',
+        }
       },
       { status: 500 }
     )

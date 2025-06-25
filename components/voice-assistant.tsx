@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { 
   LiveKitRoom, 
   RoomAudioRenderer, 
@@ -25,7 +25,7 @@ import StatusDisplay from "@/components/status-display"
 import VisualFeedback from "@/components/visual-feedback"
 import TranscriptArea from "@/components/transcript-area"
 import { Button } from "@/components/ui/button"
-import { Phone, PhoneOff, Loader2, Mic, MicOff, Camera, CameraOff } from "lucide-react"
+import { Phone, PhoneOff, Loader2, Mic, MicOff, Camera, CameraOff, AlertCircle } from "lucide-react"
 import type { Message } from "@/components/transcript-area"
 import ActionCommandHandler from "@/components/action-command-handler"
 
@@ -49,11 +49,15 @@ function segmentToChatMessage(
 function VoiceAssistantInner({ 
   onMessagesUpdate, 
   isCameraEnabled, 
-  onCameraToggle 
+  onCameraToggle,
+  onError,
+  onConnectionStateChange
 }: { 
   onMessagesUpdate?: (messages: Message[]) => void
   isCameraEnabled?: boolean
   onCameraToggle?: () => void
+  onError?: (error: string) => void
+  onConnectionStateChange?: (state: ConnectionState) => void
 }) {
   const connectionState = useConnectionState()
   const localParticipant = useLocalParticipant()
@@ -82,6 +86,11 @@ function VoiceAssistantInner({
   // Store transcripts using Map like in playground for proper real-time updates
   const [transcripts, setTranscripts] = useState<Map<string, Message>>(new Map())
   const [messages, setMessages] = useState<Message[]>([])
+
+  // Notify parent of connection state changes
+  useEffect(() => {
+    onConnectionStateChange?.(connectionState)
+  }, [connectionState, onConnectionStateChange])
 
   // Handle camera toggling
   useEffect(() => {
@@ -290,15 +299,41 @@ export default function VoiceAssistant() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [hasEverConnected, setHasEverConnected] = useState<boolean>(false)
-  const [persistedMessages, setPersistedMessages] = useState<Message[]>([]) // Store chat history
+  const [persistedMessages, setPersistedMessages] = useState<Message[]>([])
   const [isCameraEnabled, setIsCameraEnabled] = useState<boolean>(false)
+  const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected)
+  const [retryCount, setRetryCount] = useState<number>(0)
+  const [lastConnectionAttempt, setLastConnectionAttempt] = useState<number>(0)
+  
+  // Ref to track if we're currently connecting to prevent duplicate requests
+  const connectingRef = useRef<boolean>(false)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>()
 
-  // Generate token and connect
-  const handleConnect = async () => {
+  // Clear any pending reconnection attempts
+  const clearReconnectTimeout = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = undefined
+    }
+  }, [])
+
+  // Enhanced token generation with retry logic
+  const generateToken = useCallback(async (isRetry: boolean = false): Promise<{ token: string; wsUrl: string } | null> => {
+    if (connectingRef.current && !isRetry) {
+      console.log('🔄 Already connecting, skipping duplicate request')
+      return null
+    }
+
     try {
+      connectingRef.current = true
       setIsLoading(true)
       setError(null)
-      console.log("Generating LiveKit token...")
+      
+      console.log('🔄 Generating LiveKit token...', { 
+        isRetry, 
+        retryCount,
+        timestamp: Date.now() 
+      })
 
       const response = await fetch('/api/livekit-token', {
         method: 'POST',
@@ -306,48 +341,167 @@ export default function VoiceAssistant() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          room: 'voice-assistant-room',
-          identity: `user_${Date.now()}`,
+          room: `voice-assistant-room-${Date.now()}`, // Unique room for each session
+          identity: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           name: 'Voice Assistant User',
-          agentName: 'voice-assistant-agent',
+          dispatchMode: 'auto', // Use auto dispatch mode
         }),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `HTTP ${response.status}`)
+        const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
       }
 
-      const { token: newToken, wsUrl: newWsUrl, agentName } = await response.json()
+      const responseData = await response.json()
+      const { token: newToken, wsUrl: newWsUrl } = responseData
+      
+      console.log('✅ Token generated successfully', {
+        hasToken: !!newToken,
+        hasWsUrl: !!newWsUrl,
+        wsUrl: newWsUrl,
+        tokenLength: newToken?.length || 0,
+        timestamp: Date.now(),
+        fullResponse: responseData
+      })
+
+      setRetryCount(0) // Reset retry count on success
+      return { token: newToken, wsUrl: newWsUrl }
+
+    } catch (err) {
+      console.error('❌ Failed to generate token:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
+      
+      // Check for specific error types
+      if (errorMessage.includes('Invalid key') || errorMessage.includes('invalid API key')) {
+        setError('Invalid LiveKit credentials. Check your environment variables.')
+        setRetryCount(0) // Don't retry on auth errors
+        return null
+      }
+      
+      setError(errorMessage)
+      throw err
+    } finally {
+      connectingRef.current = false
+      setIsLoading(false)
+    }
+  }, [retryCount])
+
+  // Handle connection with retry logic
+  const handleConnect = useCallback(async (isRetry: boolean = false) => {
+    const now = Date.now()
+    
+    // Prevent rapid successive connection attempts
+    if (!isRetry && now - lastConnectionAttempt < 2000) {
+      console.log('🔄 Rate limiting connection attempts')
+      return
+    }
+    
+    setLastConnectionAttempt(now)
+    clearReconnectTimeout()
+
+    try {
+      const result = await generateToken(isRetry)
+      if (!result) return
+
+      const { token: newToken, wsUrl: newWsUrl } = result
+      
+      // Clear any existing connection state
+      if (shouldConnect) {
+        setShouldConnect(false)
+        await new Promise(resolve => setTimeout(resolve, 500)) // Brief pause
+      }
       
       setWsUrl(newWsUrl)
       setToken(newToken)
       setShouldConnect(true)
       
-      console.log("Token generated successfully with agent dispatch:", { agentName })
-      console.log("Connecting to room...")
+      console.log('🔄 Initiating connection...', { wsUrl: newWsUrl, hasToken: !!newToken })
 
     } catch (err) {
-      console.error("Failed to generate token:", err)
+      console.error('❌ Connection failed:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
       setError(errorMessage)
       setShouldConnect(false)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
-  const handleDisconnect = () => {
+      // Implement exponential backoff for retries
+      if (retryCount < 3 && !errorMessage.includes('Invalid key')) {
+        const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 10000) // Max 10 seconds
+        console.log(`🔄 Scheduling retry ${retryCount + 1}/3 in ${retryDelay}ms`)
+        
+        setRetryCount(prev => prev + 1)
+        reconnectTimeoutRef.current = setTimeout(() => {
+          handleConnect(true)
+        }, retryDelay)
+      }
+    }
+  }, [generateToken, retryCount, shouldConnect, lastConnectionAttempt, clearReconnectTimeout])
+
+  // Handle disconnect with proper cleanup
+  const handleDisconnect = useCallback(async () => {
+    console.log('🔄 Disconnecting...')
+    clearReconnectTimeout()
     setShouldConnect(false)
-    // Don't clear wsUrl and token so we can reconnect easily
-    // Don't clear chat history - keep it visible
     setError(null)
-  }
+    setRetryCount(0)
+    
+    // Allow some time for graceful disconnect
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // Clear tokens to force regeneration on reconnect
+    setWsUrl("")
+    setToken("")
+    connectingRef.current = false
+    
+    console.log('✅ Disconnected and cleaned up')
+  }, [clearReconnectTimeout])
+
+  // Handle connection state changes
+  const handleConnectionStateChange = useCallback((state: ConnectionState) => {
+    setConnectionState(state)
+    console.log('🔄 Connection state changed:', state)
+    
+    switch (state) {
+      case ConnectionState.Connected:
+        setHasEverConnected(true)
+        setError(null)
+        setRetryCount(0)
+        setIsLoading(false)
+        clearReconnectTimeout()
+        break
+        
+      case ConnectionState.Disconnected:
+        if (shouldConnect && retryCount < 3) {
+          // Auto-retry if we were supposed to be connected
+          console.log('🔄 Unexpected disconnection, attempting reconnect...')
+          setTimeout(() => handleConnect(true), 2000)
+        }
+        break
+        
+      case ConnectionState.Reconnecting:
+        setError(null)
+        break
+    }
+  }, [shouldConnect, retryCount, handleConnect, clearReconnectTimeout])
+
+  // Handle errors from the inner component
+  const handleError = useCallback((errorMessage: string) => {
+    console.error('🚨 Voice Assistant Error:', errorMessage)
+    setError(errorMessage)
+  }, [])
 
   // Toggle camera function
-  const toggleCamera = () => {
-    setIsCameraEnabled(!isCameraEnabled)
-  }
+  const toggleCamera = useCallback(() => {
+    setIsCameraEnabled(prev => !prev)
+  }, [])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      clearReconnectTimeout()
+      connectingRef.current = false
+    }
+  }, [clearReconnectTimeout])
 
   // Show initial connection screen only if never connected
   if (!hasEverConnected && (!shouldConnect || !wsUrl || !token)) {
@@ -376,7 +530,7 @@ export default function VoiceAssistant() {
         )}
 
         <div className="flex-1 flex items-center justify-center relative z-10">
-          <div className="text-center">
+          <div className="text-center max-w-md">
             <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
               🎤
             </div>
@@ -385,7 +539,7 @@ export default function VoiceAssistant() {
             
             <div className="flex flex-col items-center space-y-2">
               <button
-                onClick={handleConnect}
+                onClick={() => handleConnect(false)}
                 disabled={isLoading}
                 className="relative w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
               >
@@ -400,8 +554,17 @@ export default function VoiceAssistant() {
               </button>
 
               {error && (
-                <div className="text-xs text-red-400 text-center max-w-xs mt-2">
-                  {error}
+                <div className="text-xs text-red-400 text-center max-w-xs mt-2 p-2 bg-red-900/20 rounded border border-red-800">
+                  <div className="flex items-center justify-center mb-1">
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Connection Error
+                  </div>
+                  <div className="text-center">{error}</div>
+                  {retryCount > 0 && (
+                    <div className="text-gray-400 mt-1">
+                      Retry {retryCount}/3...
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -487,7 +650,7 @@ export default function VoiceAssistant() {
 
           {/* Call Button */}
           <button
-            onClick={handleConnect}
+            onClick={() => handleConnect(false)}
             disabled={isLoading}
             className="relative w-14 h-14 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
           >
@@ -504,8 +667,17 @@ export default function VoiceAssistant() {
         
         {error && (
           <div className="absolute bottom-20 right-4 max-w-xs">
-            <div className="text-xs text-red-400 bg-red-900/20 px-2 py-1 rounded border border-red-800">
+            <div className="text-xs text-red-400 bg-red-900/20 px-3 py-2 rounded border border-red-800">
+              <div className="flex items-center mb-1">
+                <AlertCircle className="h-3 w-3 mr-1" />
+                Error
+              </div>
               {error}
+              {retryCount > 0 && (
+                <div className="text-gray-400 mt-1">
+                  Retrying... ({retryCount}/3)
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -522,20 +694,37 @@ export default function VoiceAssistant() {
       audio={true}
       video={false}
       onError={(e) => {
-        setError(e.message)
-        console.error("LiveKit error:", e)
-        // Don't automatically disconnect on error - let user retry
+        const errorMessage = e.message || 'Connection error'
+        console.error("🚨 LiveKit Connection Error Details:", {
+          message: e.message,
+          error: e,
+          wsUrl,
+          tokenPreview: token ? token.substring(0, 50) + '...' : 'No token',
+          tokenLength: token?.length || 0,
+          timestamp: new Date().toISOString()
+        })
+        
+        // Specific error handling
+        if (errorMessage.includes('invalid API key') || errorMessage.includes('Invalid key')) {
+          setError('Invalid LiveKit credentials. Please check your LIVEKIT_API_KEY and LIVEKIT_API_SECRET environment variables.')
+        } else if (errorMessage.includes('Failed to connect') || errorMessage.includes('network')) {
+          setError('Network connection failed. Please check your LIVEKIT_URL and internet connection.')
+        } else {
+          setError(errorMessage)
+        }
+        
+        handleError(errorMessage)
       }}
       onConnected={() => {
         console.log("LiveKit: Successfully connected to room")
         setError(null)
         setHasEverConnected(true)
-        setIsLoading(false) // Clear loading state on successful connection
+        setIsLoading(false)
       }}
       onDisconnected={(reason) => {
         console.log("LiveKit: Disconnected from room", reason)
+        setIsLoading(false)
         setShouldConnect(false)
-        setIsLoading(false) // Clear loading state on disconnect
       }}
     >
       <div className="flex-1 flex flex-col min-h-0 relative">
@@ -545,12 +734,14 @@ export default function VoiceAssistant() {
           onMessagesUpdate={setPersistedMessages}
           isCameraEnabled={isCameraEnabled}
           onCameraToggle={toggleCamera}
+          onError={handleError}
+          onConnectionStateChange={handleConnectionStateChange}
         />
         
         {/* Floating Action Buttons */}
         <div className="absolute z-30 bottom-4 right-4 flex flex-col space-y-3">
           {/* Camera Button - only show when connected */}
-          {shouldConnect && (
+          {shouldConnect && connectionState === ConnectionState.Connected && (
             <button
               onClick={toggleCamera}
               className={`relative w-12 h-12 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 ${
@@ -572,7 +763,7 @@ export default function VoiceAssistant() {
 
           {/* Call Button */}
           <button
-            onClick={shouldConnect ? handleDisconnect : handleConnect}
+            onClick={shouldConnect ? handleDisconnect : () => handleConnect(false)}
             disabled={isLoading}
             className={`relative w-14 h-14 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 ${
               shouldConnect
@@ -592,6 +783,24 @@ export default function VoiceAssistant() {
             </div>
           </button>
         </div>
+        
+        {/* Error Display */}
+        {error && shouldConnect && (
+          <div className="absolute bottom-20 right-4 max-w-xs z-40">
+            <div className="text-xs text-red-400 bg-red-900/20 px-3 py-2 rounded border border-red-800 backdrop-blur-sm">
+              <div className="flex items-center mb-1">
+                <AlertCircle className="h-3 w-3 mr-1" />
+                Connection Error
+              </div>
+              {error}
+              {retryCount > 0 && (
+                <div className="text-gray-400 mt-1">
+                  Retrying... ({retryCount}/3)
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <RoomAudioRenderer />
