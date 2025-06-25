@@ -11,14 +11,21 @@ export async function POST(request: NextRequest) {
     const apiSecret = process.env.LIVEKIT_API_SECRET
     const wsUrl = process.env.LIVEKIT_URL
 
+    console.log('🔧 Environment check:', {
+      hasApiKey: !!apiKey,
+      hasApiSecret: !!apiSecret,
+      hasWsUrl: !!wsUrl,
+      nodeEnv: process.env.NODE_ENV
+    })
+
     if (!apiKey || !apiSecret || !wsUrl) {
-      console.error('Missing LiveKit environment variables', {
+      console.error('❌ Missing LiveKit environment variables', {
         hasApiKey: !!apiKey,
         hasApiSecret: !!apiSecret,
         hasWsUrl: !!wsUrl
       })
       return NextResponse.json(
-        { error: 'LiveKit configuration missing' },
+        { error: 'LiveKit configuration missing - check environment variables' },
         { status: 500 }
       )
     }
@@ -27,14 +34,15 @@ export async function POST(request: NextRequest) {
     const userIdentity = identity || `user_${Math.random().toString(36).substr(2, 9)}`
     const userName = name || 'Voice Assistant User'
     const roomName = room || 'voice-assistant-room'
-    const defaultAgentName = 'voice-assistant-agent' // This must match your entrypoint.py
+    const defaultAgentName = 'voice-assistant-agent' // This MUST match entrypoint.py exactly
     
-    console.log('Generating token with configuration:', {
+    console.log('🎯 Token generation configuration:', {
       roomName,
       userIdentity,
       userName,
       agentName: defaultAgentName,
-      wsUrl: wsUrl.replace(/\/+$/, '') // Remove trailing slashes
+      wsUrl: wsUrl.replace(/\/+$/, ''), // Remove trailing slashes
+      timestamp: new Date().toISOString()
     })
 
     const token = new AccessToken(apiKey, apiSecret, {
@@ -43,7 +51,8 @@ export async function POST(request: NextRequest) {
       metadata: JSON.stringify({ 
         user_id: userIdentity,
         room: roomName,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        source: 'next-api-route'
       }),
     })
 
@@ -57,20 +66,27 @@ export async function POST(request: NextRequest) {
       canUpdateOwnMetadata: true,
     })
 
-    // FIXED: Enable explicit agent dispatch - this ensures reliable agent joining
+    // CRITICAL: Enable explicit agent dispatch with exact agent name matching
     // This configuration dispatches the agent when the participant connects
+    const agentDispatch = new RoomAgentDispatch({
+      agentName: defaultAgentName, // Must match WorkerOptions.agent_name in entrypoint.py
+      metadata: JSON.stringify({ 
+        user_id: userIdentity,
+        room: roomName,
+        timestamp: Date.now(),
+        source: 'web-widget',
+        dispatch_reason: 'participant_connection'
+      }),
+    })
+
     token.roomConfig = new RoomConfiguration({
-      agents: [
-        new RoomAgentDispatch({
-          agentName: defaultAgentName,
-          metadata: JSON.stringify({ 
-            user_id: userIdentity,
-            room: roomName,
-            timestamp: Date.now(),
-            source: 'web-widget'
-          }),
-        }),
-      ],
+      agents: [agentDispatch],
+    })
+
+    console.log('🔧 Agent dispatch configuration:', {
+      agentName: defaultAgentName,
+      metadataKeys: Object.keys(JSON.parse(agentDispatch.metadata || '{}')),
+      roomConfigAgentsCount: 1
     })
 
     // Generate the token
@@ -81,7 +97,9 @@ export async function POST(request: NextRequest) {
       identity: userIdentity, 
       name: userName,
       agentName: defaultAgentName,
-      tokenLength: jwt.length
+      tokenLength: jwt.length,
+      jwtPreview: jwt.substring(0, 50) + '...',
+      mode: 'explicit_dispatch'
     })
 
     return NextResponse.json({
@@ -90,13 +108,24 @@ export async function POST(request: NextRequest) {
       room: roomName,
       identity: userIdentity,
       agentName: defaultAgentName,
-      mode: 'explicit_dispatch'
+      mode: 'explicit_dispatch',
+      debug: {
+        timestamp: new Date().toISOString(),
+        tokenGenerated: true,
+        agentDispatchConfigured: true
+      }
     })
 
   } catch (error) {
     console.error('❌ Error generating LiveKit token:', error)
+    console.error('📍 Error stack trace:', (error as Error).stack)
+    
     return NextResponse.json(
-      { error: 'Failed to generate token', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: 'Failed to generate token', 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     )
   }
