@@ -27,16 +27,30 @@ const ThemeProviderContext = React.createContext<ThemeProviderState>(initialStat
 
 export function ThemeProvider({
   children,
-  defaultTheme = "system",
-  storageKey = "vite-ui-theme",
+  defaultTheme = "dark", // Changed default to dark since that's what was working
+  storageKey = "voice-assistant-theme",
   attribute = "class",
   enableSystem = true,
   disableTransitionOnChange = false,
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = React.useState<Theme>(() => (localStorage.getItem(storageKey) as Theme) || defaultTheme)
+  const [theme, setTheme] = React.useState<Theme>(defaultTheme)
+  const [mounted, setMounted] = React.useState(false)
+
+  // Only run on client side
+  React.useEffect(() => {
+    setMounted(true)
+
+    // Get theme from localStorage only on client side
+    const storedTheme = localStorage.getItem(storageKey) as Theme
+    if (storedTheme) {
+      setTheme(storedTheme)
+    }
+  }, [storageKey])
 
   React.useEffect(() => {
+    if (!mounted) return
+
     const root = window.document.documentElement
 
     root.classList.remove("light", "dark")
@@ -57,14 +71,21 @@ export function ThemeProvider({
     } else {
       root.setAttribute(attribute, theme)
     }
-  }, [theme, attribute, enableSystem])
+  }, [theme, attribute, enableSystem, mounted])
 
   const value = {
     theme,
     setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme)
+      if (mounted) {
+        localStorage.setItem(storageKey, theme)
+      }
       setTheme(theme)
     },
+  }
+
+  // Prevent hydration mismatch by not rendering until mounted
+  if (!mounted) {
+    return <div className="dark">{children}</div>
   }
 
   return (
