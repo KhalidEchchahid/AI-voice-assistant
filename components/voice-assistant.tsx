@@ -387,12 +387,12 @@ export default function VoiceAssistant() {
     }
   }, [retryCount])
 
-  // Handle connection with retry logic
-  const handleConnect = useCallback(async (isRetry: boolean = false) => {
+  // Handle connection - simplified without retry loop
+  const handleConnect = useCallback(async () => {
     const now = Date.now()
     
     // Prevent rapid successive connection attempts
-    if (!isRetry && now - lastConnectionAttempt < 2000) {
+    if (now - lastConnectionAttempt < 2000) {
       console.log('🔄 Rate limiting connection attempts')
       return
     }
@@ -401,7 +401,7 @@ export default function VoiceAssistant() {
     clearReconnectTimeout()
 
     try {
-      const result = await generateToken(isRetry)
+      const result = await generateToken(false)
       if (!result) return
 
       const { token: newToken, wsUrl: newWsUrl } = result
@@ -423,19 +423,9 @@ export default function VoiceAssistant() {
       const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
       setError(errorMessage)
       setShouldConnect(false)
-
-      // Implement exponential backoff for retries
-      if (retryCount < 3 && !errorMessage.includes('Invalid key')) {
-        const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 10000) // Max 10 seconds
-        console.log(`🔄 Scheduling retry ${retryCount + 1}/3 in ${retryDelay}ms`)
-        
-        setRetryCount(prev => prev + 1)
-        reconnectTimeoutRef.current = setTimeout(() => {
-          handleConnect(true)
-        }, retryDelay)
-      }
+      // REMOVED RETRY LOGIC - User must manually retry
     }
-  }, [generateToken, retryCount, shouldConnect, lastConnectionAttempt, clearReconnectTimeout])
+  }, [generateToken, shouldConnect, lastConnectionAttempt, clearReconnectTimeout])
 
   // Handle disconnect with proper cleanup
   const handleDisconnect = useCallback(async () => {
@@ -471,18 +461,15 @@ export default function VoiceAssistant() {
         break
         
       case ConnectionState.Disconnected:
-        if (shouldConnect && retryCount < 3) {
-          // Auto-retry if we were supposed to be connected
-          console.log('🔄 Unexpected disconnection, attempting reconnect...')
-          setTimeout(() => handleConnect(true), 2000)
-        }
+        // REMOVED AUTO-RETRY LOOP - Let user manually retry
+        console.log('🔄 Disconnected - manual reconnection required')
         break
         
       case ConnectionState.Reconnecting:
         setError(null)
         break
     }
-  }, [shouldConnect, retryCount, handleConnect, clearReconnectTimeout])
+  }, [clearReconnectTimeout])
 
   // Handle errors from the inner component
   const handleError = useCallback((errorMessage: string) => {
@@ -539,7 +526,7 @@ export default function VoiceAssistant() {
             
             <div className="flex flex-col items-center space-y-2">
               <button
-                onClick={() => handleConnect(false)}
+                onClick={handleConnect}
                 disabled={isLoading}
                 className="relative w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
               >
@@ -650,7 +637,7 @@ export default function VoiceAssistant() {
 
           {/* Call Button */}
           <button
-            onClick={() => handleConnect(false)}
+            onClick={handleConnect}
             disabled={isLoading}
             className="relative w-14 h-14 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
           >
@@ -763,7 +750,7 @@ export default function VoiceAssistant() {
 
           {/* Call Button */}
           <button
-            onClick={shouldConnect ? handleDisconnect : () => handleConnect(false)}
+            onClick={shouldConnect ? handleDisconnect : handleConnect}
             disabled={isLoading}
             className={`relative w-14 h-14 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 ${
               shouldConnect

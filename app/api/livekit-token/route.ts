@@ -28,8 +28,10 @@ export async function POST(request: NextRequest) {
       hasApiSecret: !!apiSecret,
       hasWsUrl: !!wsUrl,
       apiKeyLength: apiKey?.length || 0,
+      apiKeyPrefix: apiKey?.substring(0, 10) || 'undefined',
       wsUrlValue: wsUrl || 'undefined',
-      nodeEnv: process.env.NODE_ENV
+      nodeEnv: process.env.NODE_ENV,
+      envSource: 'process.env'
     })
 
     if (!apiKey || !apiSecret || !wsUrl) {
