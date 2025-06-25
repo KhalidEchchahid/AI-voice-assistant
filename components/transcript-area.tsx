@@ -72,25 +72,25 @@ export default function TranscriptArea({ messages }: TranscriptAreaProps) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Enhanced Chat Header */}
-      <div className="p-4 border-b border-border/50 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative overflow-hidden">
+      {/* Compact Chat Header */}
+      <div className="p-3 border-b border-border/50 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative overflow-hidden">
         {/* Animated background pattern */}
         <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 via-transparent to-cyan-500/5" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
 
         <div className="flex items-center justify-between relative z-10">
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-violet-500/25">
-                <Bot className="w-6 h-6 text-white" />
+              <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-violet-500/25">
+                <Bot className="w-4 h-4 text-white" />
               </div>
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-400/30 to-purple-500/30 animate-pulse" />
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-background animate-pulse" />
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background animate-pulse" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground text-lg">AI Voice Assistant</h2>
+              <h2 className="font-semibold text-foreground text-sm">AI Voice Assistant</h2>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                 Live conversation
               </p>
             </div>
@@ -100,11 +100,10 @@ export default function TranscriptArea({ messages }: TranscriptAreaProps) {
         </div>
       </div>
 
-      {/* Enhanced Messages */}
+      {/* Enhanced Messages with Custom Scrollbar */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth bg-gradient-to-b from-background/50 to-background/80 backdrop-blur-sm relative"
-        style={{ scrollbarWidth: "thin" }}
+        className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth bg-gradient-to-b from-background/50 to-background/80 backdrop-blur-sm relative custom-scrollbar"
       >
         {/* Subtle background pattern */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(120,119,198,0.05),transparent_50%)] pointer-events-none" />
