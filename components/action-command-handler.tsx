@@ -422,6 +422,21 @@ export default function ActionCommandHandler() {
           console.log("📥 DOM Monitor request from assistant via LiveKit:", parsedData)
           handleDOMMonitorRequest(parsedData)
         }
+        // Handle test messages for debugging
+        else if (topic === "dom_monitor_requests" && parsedData?.type === "dom_monitor_test") {
+          console.log("🧪 DOM Monitor test message received:", parsedData)
+          // Send a test response back
+          sendDOMResponse({
+            type: "dom_monitor_response",
+            request_id: parsedData.test_id || "test_response",
+            success: true,
+            data: {
+              message: "Test connection successful!",
+              timestamp: Date.now()
+            },
+            timestamp: Date.now()
+          })
+        }
         // Handle action execution commands
         else if (parsedData?.type === "execute_actions" && Array.isArray(parsedData.actions)) {
           console.log("🎯 Execute actions received via LiveKit:", parsedData)
