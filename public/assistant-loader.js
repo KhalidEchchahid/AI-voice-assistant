@@ -853,20 +853,90 @@
                   
                   // FIXED: Properly serialize elements to prevent clone errors
                   const serializedElements = elements.map(element => {
-                    // Create a plain object without DOM element references
-                    return {
-                      elementId: element.elementId || element.id,
-                      tagName: element.element?.tagName || element.tagName,
-                      text: element.element?.textContent || element.text || '',
-                      role: element.role,
+                    console.log('🔍 Serializing element:', element); // Debug log
+                    
+                    // Extract text content more comprehensively
+                    let elementText = '';
+                    
+                    // Try multiple ways to get text content
+                    if (element.text && typeof element.text === 'string') {
+                      elementText = element.text;
+                    } else if (element.element && element.element.textContent) {
+                      elementText = element.element.textContent.trim();
+                    } else if (element.element && element.element.innerText) {
+                      elementText = element.element.innerText.trim();
+                    } else if (element.textContent) {
+                      elementText = element.textContent.trim();
+                    } else if (element.innerText) {
+                      elementText = element.innerText.trim();
+                    } else if (element.element && element.element.value) {
+                      // For input elements
+                      elementText = element.element.value;
+                    } else if (element.value) {
+                      elementText = element.value;
+                    } else if (element.element && element.element.title) {
+                      // Fallback to title attribute
+                      elementText = element.element.title;
+                    } else if (element.title) {
+                      elementText = element.title;
+                    }
+                    
+                    // Clean up the text (remove extra whitespace, truncate if too long)
+                    if (elementText) {
+                      elementText = elementText.replace(/\s+/g, ' ').trim();
+                      if (elementText.length > 200) {
+                        elementText = elementText.substring(0, 197) + '...';
+                      }
+                    }
+                    
+                    // Extract more comprehensive attributes
+                    let elementAttrs = {};
+                    if (element.element) {
+                      const el = element.element;
+                      elementAttrs = {
+                        id: el.id || '',
+                        className: el.className || '',
+                        href: el.href || '',
+                        src: el.src || '',
+                        alt: el.alt || '',
+                        title: el.title || '',
+                        placeholder: el.placeholder || '',
+                        type: el.type || '',
+                        name: el.name || ''
+                      };
+                    } else if (element.attributes) {
+                      elementAttrs = element.attributes;
+                    }
+                    
+                    // Create a comprehensive serialized element
+                    const serialized = {
+                      elementId: element.elementId || element.id || 'unknown',
+                      tagName: element.element?.tagName || element.tagName || 'unknown',
+                      text: elementText,
+                      role: element.role || 'unknown',
                       confidence: element.confidence || 0.8,
                       position: element.position || {},
-                      visibility: element.visibility,
-                      interactable: element.interactable,
+                      visibility: element.visibility !== undefined ? element.visibility : true,
+                      interactable: element.interactable !== undefined ? element.interactable : true,
                       selectors: element.selectors || [],
-                      attributes: element.attributes || {},
-                      // Don't include the actual DOM element reference
+                      attributes: elementAttrs,
+                      // Add debugging info
+                      debug: {
+                        originalTextFound: !!elementText,
+                        textSource: elementText ? 'extracted' : 'none',
+                        hasElement: !!element.element,
+                        elementKeys: Object.keys(element)
+                      }
                     };
+                    
+                    console.log('✅ Serialized element:', {
+                      id: serialized.elementId.substring(0, 30) + '...',
+                      tag: serialized.tagName,
+                      text: serialized.text.substring(0, 50) + (serialized.text.length > 50 ? '...' : ''),
+                      textLength: serialized.text.length
+                    });
+                    
+                    return serialized;
                   });
                   
                   // Prepare response for backend
