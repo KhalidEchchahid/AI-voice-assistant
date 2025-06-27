@@ -858,27 +858,59 @@
                     // Extract text content more comprehensively
                     let elementText = '';
                     
-                    // Try multiple ways to get text content
-                    if (element.text && typeof element.text === 'string') {
+                    // Get the actual DOM element reference
+                    const domElement = element.element;
+                    
+                    // Try multiple ways to get text content from the DOM element
+                    if (domElement) {
+                      console.log('🔍 Found DOM element, extracting text...');
+                      try {
+                        if (domElement.textContent && domElement.textContent.trim()) {
+                          elementText = domElement.textContent.trim();
+                          console.log('✅ Got text from textContent:', elementText.substring(0, 50));
+                        } else if (domElement.innerText && domElement.innerText.trim()) {
+                          elementText = domElement.innerText.trim();
+                          console.log('✅ Got text from innerText:', elementText.substring(0, 50));
+                        } else if (domElement.value) {
+                          elementText = domElement.value;
+                          console.log('✅ Got text from value:', elementText.substring(0, 50));
+                        } else if (domElement.alt) {
+                          elementText = domElement.alt;
+                          console.log('✅ Got text from alt:', elementText.substring(0, 50));
+                        } else if (domElement.title) {
+                          elementText = domElement.title;
+                          console.log('✅ Got text from title:', elementText.substring(0, 50));
+                        } else if (domElement.placeholder) {
+                          elementText = domElement.placeholder;
+                          console.log('✅ Got text from placeholder:', elementText.substring(0, 50));
+                        } else if (domElement.ariaLabel) {
+                          elementText = domElement.ariaLabel;
+                          console.log('✅ Got text from ariaLabel:', elementText.substring(0, 50));
+                        } else {
+                          console.warn('⚠️ No text found in DOM element');
+                        }
+                      } catch (e) {
+                        console.error('❌ Error extracting text from DOM element:', e);
+                      }
+                    }
+                    
+                    // Fallback: try to get text from element object itself
+                    if (!elementText && element.text && typeof element.text === 'string') {
                       elementText = element.text;
-                    } else if (element.element && element.element.textContent) {
-                      elementText = element.element.textContent.trim();
-                    } else if (element.element && element.element.innerText) {
-                      elementText = element.element.innerText.trim();
-                    } else if (element.textContent) {
-                      elementText = element.textContent.trim();
-                    } else if (element.innerText) {
-                      elementText = element.innerText.trim();
-                    } else if (element.element && element.element.value) {
-                      // For input elements
-                      elementText = element.element.value;
-                    } else if (element.value) {
-                      elementText = element.value;
-                    } else if (element.element && element.element.title) {
-                      // Fallback to title attribute
-                      elementText = element.element.title;
-                    } else if (element.title) {
-                      elementText = element.title;
+                      console.log('✅ Got text from element.text fallback:', elementText.substring(0, 50));
+                    }
+                    
+                    // Last resort: extract from elementId if it contains encoded text
+                    if (!elementText && element.elementId) {
+                      // Element IDs like "a___Enterprise_Search_Engine__888_4023" contain the text
+                      const idParts = element.elementId.split('___');
+                      if (idParts.length > 1) {
+                        const textPart = idParts[1].split('__')[0]; // Get part before coordinates
+                        if (textPart && textPart !== element.tagName) {
+                          elementText = textPart.replace(/_/g, ' '); // Convert underscores to spaces
+                          console.log('✅ Got text from elementId:', elementText);
+                        }
+                      }
                     }
                     
                     // Clean up the text (remove extra whitespace, truncate if too long)
@@ -889,21 +921,27 @@
                       }
                     }
                     
-                    // Extract more comprehensive attributes
+                    // Extract more comprehensive attributes from DOM element
                     let elementAttrs = {};
-                    if (element.element) {
-                      const el = element.element;
-                      elementAttrs = {
-                        id: el.id || '',
-                        className: el.className || '',
-                        href: el.href || '',
-                        src: el.src || '',
-                        alt: el.alt || '',
-                        title: el.title || '',
-                        placeholder: el.placeholder || '',
-                        type: el.type || '',
-                        name: el.name || ''
-                      };
+                    if (domElement) {
+                      try {
+                        elementAttrs = {
+                          id: domElement.id || '',
+                          className: domElement.className || '',
+                          href: domElement.href || '',
+                          src: domElement.src || '',
+                          alt: domElement.alt || '',
+                          title: domElement.title || '',
+                          placeholder: domElement.placeholder || '',
+                          type: domElement.type || '',
+                          name: domElement.name || '',
+                          ariaLabel: domElement.ariaLabel || '',
+                          role: domElement.getAttribute('role') || ''
+                        };
+                      } catch (e) {
+                        console.error('❌ Error extracting attributes:', e);
+                        elementAttrs = element.attributes || {};
+                      }
                     } else if (element.attributes) {
                       elementAttrs = element.attributes;
                     }
@@ -911,9 +949,9 @@
                     // Create a comprehensive serialized element
                     const serialized = {
                       elementId: element.elementId || element.id || 'unknown',
-                      tagName: element.element?.tagName || element.tagName || 'unknown',
+                      tagName: domElement?.tagName || element.tagName || 'unknown',
                       text: elementText,
-                      role: element.role || 'unknown',
+                      role: element.role || elementAttrs.role || 'unknown',
                       confidence: element.confidence || 0.8,
                       position: element.position || {},
                       visibility: element.visibility !== undefined ? element.visibility : true,
@@ -923,9 +961,10 @@
                       // Add debugging info
                       debug: {
                         originalTextFound: !!elementText,
-                        textSource: elementText ? 'extracted' : 'none',
-                        hasElement: !!element.element,
-                        elementKeys: Object.keys(element)
+                        textSource: elementText ? (domElement ? 'domElement' : (element.text ? 'element.text' : 'elementId')) : 'none',
+                        hasElement: !!domElement,
+                        elementKeys: Object.keys(element),
+                        textLength: elementText ? elementText.length : 0
                       }
                     };
                     
@@ -933,7 +972,8 @@
                       id: serialized.elementId.substring(0, 30) + '...',
                       tag: serialized.tagName,
                       text: serialized.text.substring(0, 50) + (serialized.text.length > 50 ? '...' : ''),
-                      textLength: serialized.text.length
+                      textLength: serialized.text.length,
+                      textSource: serialized.debug.textSource
                     });
                     
                     return serialized;
