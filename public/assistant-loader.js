@@ -855,58 +855,55 @@
                   const serializedElements = elements.map(element => {
                     console.log('🔍 Serializing element:', element); // Debug log
                     
-                    // Extract text content more comprehensively
-                    let elementText = '';
+                    // CORRECTED: Use the already-extracted text from DOM Monitor
+                    // The structure is: element.element.text (already extracted by DOM Monitor)
+                    const elementData = element.element; // This is the elementData from DOM Monitor
+                    const domElement = elementData?.element; // This is the actual DOM element
                     
-                    // Get the actual DOM element reference
-                    const domElement = element.element;
+                    // Use the text that DOM Monitor already extracted
+                    let elementText = elementData?.text || '';
                     
-                    // Try multiple ways to get text content from the DOM element
-                    if (domElement) {
-                      console.log('🔍 Found DOM element, extracting text...');
+                    // Only try DOM extraction as a fallback if DOM Monitor text is empty
+                    if (!elementText && domElement) {
+                      console.log('🔍 DOM Monitor text empty, trying DOM extraction as fallback...');
                       try {
                         if (domElement.textContent && domElement.textContent.trim()) {
                           elementText = domElement.textContent.trim();
-                          console.log('✅ Got text from textContent:', elementText.substring(0, 50));
+                          console.log('✅ Got fallback text from textContent:', elementText.substring(0, 50));
                         } else if (domElement.innerText && domElement.innerText.trim()) {
                           elementText = domElement.innerText.trim();
-                          console.log('✅ Got text from innerText:', elementText.substring(0, 50));
+                          console.log('✅ Got fallback text from innerText:', elementText.substring(0, 50));
                         } else if (domElement.value) {
                           elementText = domElement.value;
-                          console.log('✅ Got text from value:', elementText.substring(0, 50));
+                          console.log('✅ Got fallback text from value:', elementText.substring(0, 50));
                         } else if (domElement.alt) {
                           elementText = domElement.alt;
-                          console.log('✅ Got text from alt:', elementText.substring(0, 50));
+                          console.log('✅ Got fallback text from alt:', elementText.substring(0, 50));
                         } else if (domElement.title) {
                           elementText = domElement.title;
-                          console.log('✅ Got text from title:', elementText.substring(0, 50));
+                          console.log('✅ Got fallback text from title:', elementText.substring(0, 50));
                         } else if (domElement.placeholder) {
                           elementText = domElement.placeholder;
-                          console.log('✅ Got text from placeholder:', elementText.substring(0, 50));
-                        } else if (domElement.ariaLabel) {
-                          elementText = domElement.ariaLabel;
-                          console.log('✅ Got text from ariaLabel:', elementText.substring(0, 50));
-                        } else {
-                          console.warn('⚠️ No text found in DOM element');
+                          console.log('✅ Got fallback text from placeholder:', elementText.substring(0, 50));
+                        } else if (domElement.getAttribute && domElement.getAttribute('aria-label')) {
+                          elementText = domElement.getAttribute('aria-label');
+                          console.log('✅ Got fallback text from aria-label:', elementText.substring(0, 50));
                         }
                       } catch (e) {
-                        console.error('❌ Error extracting text from DOM element:', e);
+                        console.error('❌ Error extracting fallback text from DOM element:', e);
                       }
-                    }
-                    
-                    // Fallback: try to get text from element object itself
-                    if (!elementText && element.text && typeof element.text === 'string') {
-                      elementText = element.text;
-                      console.log('✅ Got text from element.text fallback:', elementText.substring(0, 50));
+                    } else if (elementText) {
+                      console.log('✅ Using DOM Monitor extracted text:', elementText.substring(0, 50));
                     }
                     
                     // Last resort: extract from elementId if it contains encoded text
-                    if (!elementText && element.elementId) {
-                      // Element IDs like "a___Enterprise_Search_Engine__888_4023" contain the text
-                      const idParts = element.elementId.split('___');
+                    if (!elementText && (element.elementId || elementData?.id)) {
+                      const elementId = element.elementId || elementData.id;
+                      // Element IDs like "button___call_790_99" contain the text
+                      const idParts = elementId.split('___');
                       if (idParts.length > 1) {
                         const textPart = idParts[1].split('__')[0]; // Get part before coordinates
-                        if (textPart && textPart !== element.tagName) {
+                        if (textPart && textPart !== (elementData?.tagName || element.tagName)) {
                           elementText = textPart.replace(/_/g, ' '); // Convert underscores to spaces
                           console.log('✅ Got text from elementId:', elementText);
                         }
@@ -921,9 +918,9 @@
                       }
                     }
                     
-                    // Extract more comprehensive attributes from DOM element
-                    let elementAttrs = {};
-                    if (domElement) {
+                    // Extract attributes - use DOM Monitor data first, then fallback to DOM
+                    let elementAttrs = elementData?.attributes || {};
+                    if (domElement && Object.keys(elementAttrs).length === 0) {
                       try {
                         elementAttrs = {
                           id: domElement.id || '',
@@ -935,36 +932,36 @@
                           placeholder: domElement.placeholder || '',
                           type: domElement.type || '',
                           name: domElement.name || '',
-                          ariaLabel: domElement.ariaLabel || '',
-                          role: domElement.getAttribute('role') || ''
+                          ariaLabel: domElement.getAttribute ? domElement.getAttribute('aria-label') || '' : '',
+                          role: domElement.getAttribute ? domElement.getAttribute('role') || '' : ''
                         };
                       } catch (e) {
                         console.error('❌ Error extracting attributes:', e);
-                        elementAttrs = element.attributes || {};
                       }
-                    } else if (element.attributes) {
-                      elementAttrs = element.attributes;
                     }
                     
-                    // Create a comprehensive serialized element
+                    // Create a comprehensive serialized element using DOM Monitor data
                     const serialized = {
-                      elementId: element.elementId || element.id || 'unknown',
-                      tagName: domElement?.tagName || element.tagName || 'unknown',
+                      elementId: element.elementId || elementData?.id || 'unknown',
+                      tagName: elementData?.tagName || element.tagName || 'unknown',
                       text: elementText,
-                      role: element.role || elementAttrs.role || 'unknown',
+                      role: elementData?.role || element.role || elementAttrs.role || 'unknown',
                       confidence: element.confidence || 0.8,
-                      position: element.position || {},
-                      visibility: element.visibility !== undefined ? element.visibility : true,
-                      interactable: element.interactable !== undefined ? element.interactable : true,
-                      selectors: element.selectors || [],
+                      position: elementData?.position || element.position || {},
+                      visibility: elementData?.visibility !== undefined ? elementData.visibility : true,
+                      interactable: elementData?.interactable !== undefined ? elementData.interactable : true,
+                      selectors: elementData?.selectors || element.selectors || [],
                       attributes: elementAttrs,
                       // Add debugging info
                       debug: {
                         originalTextFound: !!elementText,
-                        textSource: elementText ? (domElement ? 'domElement' : (element.text ? 'element.text' : 'elementId')) : 'none',
+                        textSource: elementText ? (elementData?.text ? 'dom_monitor' : (domElement ? 'dom_fallback' : 'elementId')) : 'none',
                         hasElement: !!domElement,
-                        elementKeys: Object.keys(element),
-                        textLength: elementText ? elementText.length : 0
+                        hasElementData: !!elementData,
+                        elementKeys: elementData ? Object.keys(elementData) : [],
+                        textLength: elementText ? elementText.length : 0,
+                        domMonitorText: elementData?.text || 'none',
+                        domMonitorTextLength: elementData?.text ? elementData.text.length : 0
                       }
                     };
                     
@@ -973,7 +970,8 @@
                       tag: serialized.tagName,
                       text: serialized.text.substring(0, 50) + (serialized.text.length > 50 ? '...' : ''),
                       textLength: serialized.text.length,
-                      textSource: serialized.debug.textSource
+                      textSource: serialized.debug.textSource,
+                      domMonitorText: serialized.debug.domMonitorText.substring(0, 30) + '...'
                     });
                     
                     return serialized;
