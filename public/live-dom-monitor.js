@@ -485,6 +485,12 @@
     findByIntent(intent) {
       console.log("🔍 DOM Monitor: Starting intent search:", { intent });
       
+      // Fix TypeError: Add null check for intent
+      if (!intent || typeof intent !== 'string') {
+        console.warn("⚠️ DOM Monitor: Invalid intent provided:", intent);
+        return [];
+      }
+      
       const intentLower = intent.toLowerCase()
       const results = new Map()
       
@@ -1053,15 +1059,19 @@
         }
         else if (payload.request_type === "current_state") {
           console.log("📊 DOM Monitor: Processing current_state request")
-          if (window.AIAssistantDOMMonitor) {
+          if (window.AIAssistantDOMMonitor && window.AIAssistantDOMMonitor._internal) {
             const allElements = window.AIAssistantDOMMonitor.getAllElements({
               visible: true,
               interactable: true
             })
+            
+            // Convert to serializable format for postMessage
+            const serializableElements = this.serializeRawElementsForTransport(allElements.slice(0, 50))
+            
             response = {
               success: true,
               data: {
-                elements: allElements.slice(0, 50), // Limit to 50 elements
+                elements: serializableElements,
                 stats: window.AIAssistantDOMMonitor.getStats(),
                 page_info: {
                   url: window.location.href,
@@ -1115,23 +1125,68 @@
           timestamp: Date.now()
         }
 
-        console.log("📤 DOM Monitor: Sending response back to action-command-handler:", {
-          request_id: requestId,
-          success: responseData.success,
-          elements_count: responseData.data?.elements?.length || responseData.elements?.length || 0,
-          response_size: JSON.stringify(message).length
-        })
+        // Test serialization before sending
+        let messageSize = 0
+        try {
+          const serializedMessage = JSON.stringify(message)
+          messageSize = serializedMessage.length
+          console.log("📤 DOM Monitor: Message serialization test successful:", {
+            request_id: requestId,
+            success: responseData.success,
+            elements_count: responseData.data?.elements?.length || responseData.elements?.length || 0,
+            response_size: messageSize,
+            has_elements: !!(responseData.data?.elements || responseData.elements),
+            message_structure: {
+              action: typeof message.action,
+              type: typeof message.type,
+              success: typeof message.success,
+              data_type: typeof message.data,
+              has_error: !!message.error
+            }
+          })
+        } catch (serializationError) {
+          console.error("❌ DOM Monitor: Message serialization failed:", serializationError)
+          
+          // Send simplified error response
+          const errorMessage = {
+            action: "dom_monitor_response",
+            type: "dom_monitor_response", 
+            requestId: requestId,
+            request_id: requestId,
+            success: false,
+            error: "Response serialization failed: " + serializationError.message,
+            timestamp: Date.now()
+          }
+          
+          window.parent?.postMessage(errorMessage, '*')
+          return
+        }
 
         // Send back to parent (action-command-handler.tsx)
         if (window.parent) {
           window.parent.postMessage(message, '*')
-          console.log("✅ DOM Monitor: Response sent via postMessage")
+          console.log("✅ DOM Monitor: Response sent via postMessage successfully")
         } else {
           console.error("❌ DOM Monitor: No parent window available for response")
         }
 
       } catch (error) {
         console.error("❌ DOM Monitor: Error sending DOM response:", error)
+        
+        // Try to send minimal error response
+        try {
+          window.parent?.postMessage({
+            action: "dom_monitor_response",
+            type: "dom_monitor_response", 
+            requestId: requestId,
+            request_id: requestId,
+            success: false,
+            error: "DOM response send failed: " + error.message,
+            timestamp: Date.now()
+          }, '*')
+        } catch (fallbackError) {
+          console.error("❌ DOM Monitor: Even fallback response failed:", fallbackError)
+        }
       }
     }
 
@@ -1271,22 +1326,121 @@
         // Validate elements still exist and are accessible
         const validMatches = this.validateElements(matches)
         
+        // Convert to serializable format for postMessage
+        const serializableElements = this.serializeElementsForTransport(validMatches)
+        
+        console.log("🔍 DOM Monitor: Prepared serializable elements:", {
+          originalCount: validMatches.length,
+          serializableCount: serializableElements.length,
+          sampleElement: serializableElements[0] ? {
+            text: serializableElements[0].text?.slice(0, 30),
+            tag: serializableElements[0].tagName,
+            role: serializableElements[0].role,
+            selectorsCount: serializableElements[0].selectors?.length || 0
+          } : null
+        })
+        
         return {
           success: true,
-          elements: validMatches,
-          total: validMatches.length,
+          elements: serializableElements,
+          total: serializableElements.length,
           confidence: this.calculateOverallConfidence(validMatches),
           timestamp: Date.now(),
           stats: this.cache.getStats()
         }
         
       } catch (error) {
+        console.error("❌ DOM Monitor: Error in handleElementQuery:", error)
         return {
           success: false,
           error: error.message,
           timestamp: Date.now()
         }
       }
+    }
+
+    serializeElementsForTransport(matches) {
+      const serializable = []
+      
+      for (const match of matches) {
+        try {
+          const elementData = match.element
+          const domElement = elementData.element
+          
+          // Create serializable version without DOM element reference
+          const serializableElement = {
+            elementId: elementData.id || match.elementId,
+            tagName: elementData.tagName,
+            text: elementData.text,
+            role: elementData.role,
+            selectors: elementData.selectors || [],
+            attributes: elementData.attributes || {},
+            position: elementData.position || {},
+            visibility: elementData.visibility,
+            interactable: elementData.interactable,
+            accessibilityInfo: elementData.accessibilityInfo || {},
+            confidence: match.confidence || 0.8,
+            totalScore: match.totalScore || 0,
+            scores: match.scores || {},
+            validated: match.validated || false,
+            timestamp: match.timestamp || Date.now(),
+            // Add computed properties for better action execution
+            href: domElement?.href || null,
+            value: domElement?.value || null,
+            type: domElement?.type || null,
+            disabled: domElement?.disabled || false,
+            readonly: domElement?.readOnly || false
+          }
+          
+          serializable.push(serializableElement)
+          
+        } catch (error) {
+          console.error("❌ DOM Monitor: Error serializing element:", error)
+          // Skip this element and continue with others
+        }
+      }
+      
+             return serializable
+     }
+
+    serializeRawElementsForTransport(elements) {
+      const serializable = []
+      
+      for (const elementData of elements) {
+        try {
+          const domElement = elementData.element
+          
+          // Create serializable version without DOM element reference
+          const serializableElement = {
+            elementId: elementData.elementId || elementData.id,
+            tagName: elementData.tagName,
+            text: elementData.text,
+            role: elementData.role,
+            selectors: elementData.selectors || [],
+            attributes: elementData.attributes || {},
+            position: elementData.position || {},
+            visibility: elementData.visibility,
+            interactable: elementData.interactable,
+            accessibilityInfo: elementData.accessibilityInfo || {},
+            confidence: elementData.confidence || 0.8,
+            timestamp: elementData.timestamp || Date.now(),
+            // Add computed properties for better action execution
+            href: domElement?.href || null,
+            value: domElement?.value || null,
+            type: domElement?.type || null,
+            disabled: domElement?.disabled || false,
+            readonly: domElement?.readOnly || false
+          }
+          
+          serializable.push(serializableElement)
+          
+        } catch (error) {
+          console.error("❌ DOM Monitor: Error serializing raw element:", error)
+          // Skip this element and continue with others
+        }
+      }
+      
+      return serializable
     }
 
     validateElements(matches) {
