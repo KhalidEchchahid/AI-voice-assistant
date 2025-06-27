@@ -646,9 +646,39 @@ export default function ActionCommandHandler() {
       try {
         const data = event.data
 
+        // ENHANCED LOGGING: Log all window messages for debugging
+        if (data && (data.action === "dom_monitor_response" || data.type === "dom_monitor_response")) {
+          console.log("🎯 DOM MONITOR RESPONSE RECEIVED - Full Details:", {
+            source: event.origin,
+            timestamp: new Date().toISOString(),
+            data: data,
+            dataSize: JSON.stringify(data).length,
+            hasElements: !!data.data?.elements,
+            elementsCount: data.data?.elements?.length || 0,
+            success: data.success,
+            error: data.error
+          })
+
+          // Log individual elements if found
+          if (data.data?.elements && data.data.elements.length > 0) {
+            console.log("🔍 DOM MONITOR FOUND ELEMENTS:", data.data.elements.map((el: any, index: number) => ({
+              index: index + 1,
+              text: el.text?.slice(0, 50) + "...",
+              tag: el.tagName,
+              role: el.role,
+              visible: el.visibility,
+              interactable: el.interactable,
+              selectors: el.selectors?.map((s: any) => `${s.type}: ${s.value}`),
+              confidence: el.confidence
+            })))
+          } else {
+            console.log("❌ DOM MONITOR: No elements found or response failed")
+          }
+        }
+
         // Handle DOM Monitor response from parent window
         if (data && data.action === "dom_monitor_response") {
-          console.log("📥 Received DOM Monitor response from parent:", data)
+          console.log("📥 Processing DOM Monitor response (action format):", data.requestId || data.request_id)
 
           // Convert parent response to LiveKit format and send back to backend
           const livekitResponse: DOMMonitorResponseData = {
@@ -660,28 +690,56 @@ export default function ActionCommandHandler() {
             timestamp: Date.now(),
           }
 
+          console.log("📤 SENDING DOM RESPONSE TO BACKEND:", {
+            request_id: livekitResponse.request_id,
+            success: livekitResponse.success,
+            elements_count: livekitResponse.data?.elements?.length || 0,
+            response_size: JSON.stringify(livekitResponse).length
+          })
+
           sendDOMResponse(livekitResponse)
 
-          // Add to debug history
+          // Add to debug history with enhanced details
           addToHistory(
             {
               type: "dom_monitor_response_received",
               request_id: data.requestId || data.request_id,
               success: data.success,
               elements_found: data.data?.elements?.length || 0,
+              raw_response: data,
+              livekit_response: livekitResponse
             },
             "dom_monitor_response",
           )
         }
         // Handle legacy format for backward compatibility
         else if (data && data.type === "dom_monitor_response") {
-          console.log("📥 Received legacy DOM Monitor response from parent:", data)
+          console.log("📥 Processing DOM Monitor response (legacy format):", data.request_id)
+
+          console.log("📤 SENDING LEGACY DOM RESPONSE TO BACKEND:", {
+            request_id: data.request_id,
+            success: data.success,
+            elements_count: data.data?.elements?.length || 0,
+            response_size: JSON.stringify(data).length
+          })
 
           // Send response back to backend via LiveKit
           sendDOMResponse(data as DOMMonitorResponseData)
 
           // Add to debug history
-          addToHistory(data, "dom_monitor_response")
+          addToHistory({
+            ...data,
+            response_type: "legacy_format"
+          }, "dom_monitor_response")
+        }
+        // Log all other window messages for debugging
+        else if (data && (data.action || data.type)) {
+          console.log("📨 Other window message received:", {
+            action: data.action,
+            type: data.type,
+            source: event.origin,
+            keys: Object.keys(data)
+          })
         }
       } catch (error: any) {
         console.error("❌ Error handling window message:", error)

@@ -936,12 +936,50 @@
 
     setupMessageListener() {
       window.addEventListener('message', (event) => {
-        // Security check - only process messages from parent iframe
-        if (event.source !== window.parent) return
-        
-        const data = event.data
-        if (data && data.type && data.type.startsWith('DOM_MONITOR_')) {
-          this.handleMessage(data)
+        try {
+          const data = event.data
+          
+          // ENHANCED LOGGING: Log all incoming messages for debugging
+          if (data && (data.action || data.type)) {
+            console.log("📥 DOM Monitor: Received postMessage:", {
+              action: data.action,
+              type: data.type,
+              source: event.origin,
+              from: event.source === window.parent ? "parent_iframe" : "other",
+              keys: Object.keys(data),
+              timestamp: new Date().toISOString()
+            })
+          }
+          
+          // Handle DOM Monitor requests from action-command-handler.tsx
+          if (data && data.action === "dom_monitor_request" && data.type === "dom_monitor_request") {
+            console.log("🔍 DOM Monitor: Processing DOM request from action-command-handler:", {
+              request_id: data.request_id,
+              intent: data.intent,
+              request_type: data.payload?.request_type,
+              options: data.options
+            })
+            
+            // Extract the payload
+            const payload = data.payload || data
+            this.handleDOMRequest(payload, data.request_id)
+          }
+          // Handle legacy DOM_MONITOR_ format 
+          else if (data && data.type && data.type.startsWith('DOM_MONITOR_')) {
+            console.log("🔍 DOM Monitor: Processing legacy DOM_MONITOR_ message:", data.type)
+            this.handleMessage(data)
+          }
+          // Log unhandled messages for debugging
+          else if (data && (data.action || data.type)) {
+            console.log("❓ DOM Monitor: Unhandled message:", {
+              action: data.action,
+              type: data.type,
+              reason: "No matching handler"
+            })
+          }
+          
+        } catch (error) {
+          console.error("❌ DOM Monitor: Error processing postMessage:", error)
         }
       })
     }
@@ -955,6 +993,145 @@
         } catch (error) {
           this.sendError(message.id, error.message)
         }
+      }
+    }
+
+    handleDOMRequest(payload, requestId) {
+      try {
+        console.log("🔍 DOM Monitor: Starting DOM request processing:", {
+          request_id: requestId,
+          request_type: payload.request_type,
+          intent: payload.intent,
+          options: payload.options
+        })
+
+        let response = null
+
+        // Route to appropriate handler based on request type
+        if (payload.request_type === "find_elements") {
+          console.log("🔍 DOM Monitor: Processing find_elements request for intent:", payload.intent)
+          
+          // Use the internal monitor instance to find elements
+          if (window.AIAssistantDOMMonitor && window.AIAssistantDOMMonitor._internal) {
+            const monitor = window.AIAssistantDOMMonitor._internal.monitor
+            response = monitor.handleElementQuery({
+              intent: payload.intent,
+              options: payload.options || {}
+            })
+            
+            console.log("✅ DOM Monitor: Element query completed:", {
+              success: response.success,
+              elements_found: response.elements?.length || 0,
+              confidence: response.confidence
+            })
+          } else {
+            console.error("❌ DOM Monitor: Internal monitor not available")
+            response = {
+              success: false,
+              error: "DOM Monitor not properly initialized",
+              timestamp: Date.now()
+            }
+          }
+        } 
+        else if (payload.request_type === "get_stats") {
+          console.log("📊 DOM Monitor: Processing get_stats request")
+          if (window.AIAssistantDOMMonitor) {
+            response = {
+              success: true,
+              data: {
+                stats: window.AIAssistantDOMMonitor.getStats()
+              },
+              timestamp: Date.now()
+            }
+          } else {
+            response = {
+              success: false,
+              error: "DOM Monitor not available",
+              timestamp: Date.now()
+            }
+          }
+        }
+        else if (payload.request_type === "current_state") {
+          console.log("📊 DOM Monitor: Processing current_state request")
+          if (window.AIAssistantDOMMonitor) {
+            const allElements = window.AIAssistantDOMMonitor.getAllElements({
+              visible: true,
+              interactable: true
+            })
+            response = {
+              success: true,
+              data: {
+                elements: allElements.slice(0, 50), // Limit to 50 elements
+                stats: window.AIAssistantDOMMonitor.getStats(),
+                page_info: {
+                  url: window.location.href,
+                  title: document.title,
+                  domain: window.location.hostname,
+                  timestamp: Date.now()
+                }
+              },
+              timestamp: Date.now()
+            }
+          } else {
+            response = {
+              success: false,
+              error: "DOM Monitor not available",
+              timestamp: Date.now()
+            }
+          }
+        }
+        else {
+          console.error("❌ DOM Monitor: Unknown request type:", payload.request_type)
+          response = {
+            success: false,
+            error: `Unknown request type: ${payload.request_type}`,
+            timestamp: Date.now()
+          }
+        }
+
+        // Send response back to action-command-handler.tsx
+        this.sendDOMResponse(requestId, response)
+
+      } catch (error) {
+        console.error("❌ DOM Monitor: Error processing DOM request:", error)
+        this.sendDOMResponse(requestId, {
+          success: false,
+          error: error.message,
+          timestamp: Date.now()
+        })
+      }
+    }
+
+    sendDOMResponse(requestId, responseData) {
+      try {
+        const message = {
+          action: "dom_monitor_response",
+          type: "dom_monitor_response", 
+          requestId: requestId,
+          request_id: requestId, // Both formats for compatibility
+          success: responseData.success,
+          data: responseData.data || responseData,
+          error: responseData.error,
+          timestamp: Date.now()
+        }
+
+        console.log("📤 DOM Monitor: Sending response back to action-command-handler:", {
+          request_id: requestId,
+          success: responseData.success,
+          elements_count: responseData.data?.elements?.length || responseData.elements?.length || 0,
+          response_size: JSON.stringify(message).length
+        })
+
+        // Send back to parent (action-command-handler.tsx)
+        if (window.parent) {
+          window.parent.postMessage(message, '*')
+          console.log("✅ DOM Monitor: Response sent via postMessage")
+        } else {
+          console.error("❌ DOM Monitor: No parent window available for response")
+        }
+
+      } catch (error) {
+        console.error("❌ DOM Monitor: Error sending DOM response:", error)
       }
     }
 
