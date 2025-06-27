@@ -68,8 +68,10 @@
 
   // --- Configuration ---
   const DEFAULT_CONFIG = {
-    // Assistant iframe URL
-    iframeUrl: "https://ai-voice-assistant-nu.vercel.app/",
+    // Assistant iframe URL - Auto-detect for development
+    iframeUrl: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.endsWith('.local') 
+      ? "http://localhost:3000/" 
+      : "https://ai-voice-assistant-nu.vercel.app/",
 
     // Initial state
     initiallyVisible: false,
@@ -752,10 +754,43 @@
     if (elements.iframe && elements.iframe.contentWindow) {
       try {
         const expectedOrigin = new URL(config.iframeUrl).origin
-        elements.iframe.contentWindow.postMessage(message, expectedOrigin)
+        
+        // ENHANCED: Ensure message is JSON-serializable to prevent DataCloneError
+        let serializedMessage;
+        try {
+          // Test serialization and clean any non-serializable objects
+          serializedMessage = JSON.parse(JSON.stringify(message));
+        } catch (serializationError) {
+          console.warn("AI Assistant: Message serialization failed, attempting cleanup:", serializationError);
+          
+          // Create a clean version by manually copying serializable properties
+          serializedMessage = {};
+          for (const [key, value] of Object.entries(message)) {
+            try {
+              // Test if this property is serializable
+              JSON.stringify(value);
+              serializedMessage[key] = value;
+            } catch (e) {
+              console.warn(`AI Assistant: Skipping non-serializable property '${key}':`, e.message);
+              // For debugging, include a note about what was skipped
+              serializedMessage[`${key}_skipped`] = `Non-serializable: ${typeof value}`;
+            }
+          }
+        }
+        
+        console.log("AI Assistant: Sending message to iframe:", {
+          origin: expectedOrigin,
+          messageType: serializedMessage.type || serializedMessage.action,
+          messageSize: JSON.stringify(serializedMessage).length
+        });
+        
+        elements.iframe.contentWindow.postMessage(serializedMessage, expectedOrigin)
       } catch (e) {
         console.error("AI Assistant: Failed to send message to iframe:", e)
+        console.error("AI Assistant: Message that failed to send:", message)
       }
+    } else {
+      console.warn("AI Assistant: Cannot send message - iframe not available")
     }
   }
 
@@ -816,12 +851,30 @@
                   
                   console.log('📋 DOM Monitor found elements:', elements);
                   
+                  // FIXED: Properly serialize elements to prevent clone errors
+                  const serializedElements = elements.map(element => {
+                    // Create a plain object without DOM element references
+                    return {
+                      elementId: element.elementId || element.id,
+                      tagName: element.element?.tagName || element.tagName,
+                      text: element.element?.textContent || element.text || '',
+                      role: element.role,
+                      confidence: element.confidence || 0.8,
+                      position: element.position || {},
+                      visibility: element.visibility,
+                      interactable: element.interactable,
+                      selectors: element.selectors || [],
+                      attributes: element.attributes || {},
+                      // Don't include the actual DOM element reference
+                    };
+                  });
+                  
                   // Prepare response for backend
                   const response = {
                     type: 'dom_monitor_response',
                     request_id: requestId,
                     intent: intent,
-                    elements: elements,
+                    elements: serializedElements,
                     success: true,
                     timestamp: new Date().toISOString(),
                     source: 'live_dom_monitor'

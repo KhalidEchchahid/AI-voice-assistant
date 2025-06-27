@@ -485,10 +485,25 @@
     findByIntent(intent) {
       console.log("🔍 DOM Monitor: Starting intent search:", { intent });
       
-      // Fix TypeError: Add null check for intent
-      if (!intent || typeof intent !== 'string') {
-        console.warn("⚠️ DOM Monitor: Invalid intent provided:", intent);
-        return [];
+      // ENHANCED: Better intent validation and fallback handling
+      if (!intent || intent === 'undefined' || typeof intent !== 'string') {
+        console.warn("⚠️ DOM Monitor: Invalid intent provided:", intent, "- using fallback to show all elements");
+        // Return all visible interactive elements as fallback
+        const fallbackResults = [];
+        for (const [elementId, data] of this.cache.entries()) {
+          if (data.visibility && data.interactable) {
+            fallbackResults.push({
+              elementId,
+              element: data,
+              scores: { fallback: 0.5 },
+              totalScore: 0.5,
+              confidence: 0.5
+            });
+          }
+        }
+        
+        console.log("✅ DOM Monitor: Fallback search returned:", fallbackResults.length, "elements");
+        return fallbackResults.sort((a, b) => b.element.lastSeen - a.element.lastSeen).slice(0, 10);
       }
       
       const intentLower = intent.toLowerCase()
@@ -530,7 +545,10 @@
         'select': ['select'],
         'submit': ['button', 'form'],
         'check': ['checkbox'],
-        'scroll': ['generic']
+        'scroll': ['generic'],
+        'show': ['button', 'link', 'input', 'textarea', 'select'], // For "show everything"
+        'everything': ['button', 'link', 'input', 'textarea', 'select', 'form'],
+        'all': ['button', 'link', 'input', 'textarea', 'select', 'form']
       }
       
       for (const [action, roles] of Object.entries(roleKeywords)) {
@@ -760,6 +778,36 @@
       
       console.log("🔍 DOM Monitor: Found potential elements:", elements.length);
       
+      // DEBUG: Log some sample elements found
+      if (elements.length > 0) {
+        console.log("🔍 DOM Monitor: Sample elements found:");
+        Array.from(elements).slice(0, 5).forEach((el, i) => {
+          console.log(`  ${i+1}. ${el.tagName} - "${(el.textContent || el.value || el.id || 'no text').slice(0, 50)}" - ID: ${el.id || 'none'} - Classes: ${el.className || 'none'}`);
+        });
+      } else {
+        console.warn("⚠️ DOM Monitor: No elements found with standard selectors, trying broader search...");
+        
+        // Try broader search if no elements found
+        const allElements = document.querySelectorAll('*');
+        const clickableElements = Array.from(allElements).filter(el => {
+          return el.onclick || 
+                 el.getAttribute('onclick') || 
+                 el.style.cursor === 'pointer' ||
+                 ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) ||
+                 el.getAttribute('role') === 'button' ||
+                 el.classList.contains('clickable') ||
+                 el.classList.contains('btn') ||
+                 el.classList.contains('button');
+        });
+        
+        console.log("🔍 DOM Monitor: Broader search found:", clickableElements.length, "potentially clickable elements");
+        if (clickableElements.length > 0) {
+          clickableElements.slice(0, 5).forEach((el, i) => {
+            console.log(`  ${i+1}. ${el.tagName} - "${(el.textContent || el.value || el.id || 'no text').slice(0, 30)}" - Reason: ${el.onclick ? 'onclick' : el.tagName === 'A' ? 'link' : el.tagName === 'BUTTON' ? 'button' : 'other'}`);
+          });
+        }
+      }
+      
       for (const element of elements) {
         const elementId = this.cache.addElement(element)
         if (elementId) {
@@ -783,6 +831,48 @@
           selector: this.cache.selectorIndex.size
         }
       });
+      
+      // Force a refresh if we didn't find many elements
+      if (addedCount < 5) {
+        console.warn("⚠️ DOM Monitor: Found very few elements, forcing broader scan...");
+        setTimeout(() => {
+          this.forceBroaderScan();
+        }, 1000);
+      }
+    }
+
+    forceBroaderScan() {
+      console.log("🔄 DOM Monitor: Running broader element scan...");
+      
+      // More aggressive element finding
+      const allElements = document.querySelectorAll('*');
+      let foundCount = 0;
+      
+      Array.from(allElements).forEach(element => {
+        // Check if element might be interactive
+        const isInteractive = element.onclick || 
+                             element.getAttribute('onclick') || 
+                             element.style.cursor === 'pointer' ||
+                             ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'FORM'].includes(element.tagName) ||
+                             element.getAttribute('role') === 'button' ||
+                             element.getAttribute('role') === 'link' ||
+                             element.getAttribute('tabindex') !== null ||
+                             /\b(btn|button|click|link)\b/i.test(element.className) ||
+                             /\b(submit|send|save|cancel|close|open)\b/i.test(element.textContent || '');
+        
+        if (isInteractive) {
+          const elementId = this.cache.addElement(element);
+          if (elementId) {
+            foundCount++;
+            if (this.intersectionObserver) {
+              this.intersectionObserver.observe(element);
+            }
+          }
+        }
+      });
+      
+      console.log(`✅ DOM Monitor: Broader scan found ${foundCount} additional interactive elements`);
+      console.log(`📊 DOM Monitor: Total cache size now: ${this.cache.cache.size}`);
     }
 
     handleMutations(mutations) {
@@ -1017,11 +1107,19 @@
         if (payload.request_type === "find_elements") {
           console.log("🔍 DOM Monitor: Processing find_elements request for intent:", payload.intent)
           
+          // FIXED: Better intent validation and extraction
+          let intent = payload.intent;
+          if (!intent || intent === 'undefined' || typeof intent !== 'string') {
+            // Try to extract from other fields
+            intent = payload.query || payload.search || payload.element_type || "show all interactive elements";
+            console.warn("⚠️ DOM Monitor: Invalid or missing intent, using fallback:", intent);
+          }
+          
           // Use the internal monitor instance to find elements
           if (window.AIAssistantDOMMonitor && window.AIAssistantDOMMonitor._internal) {
             const monitor = window.AIAssistantDOMMonitor._internal.monitor
             response = monitor.handleElementQuery({
-              intent: payload.intent,
+              intent: intent,
               options: payload.options || {}
             })
             
