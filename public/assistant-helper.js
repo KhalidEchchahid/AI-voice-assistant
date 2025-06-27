@@ -109,23 +109,35 @@
   
   // Execute individual action
   function executeAction(actionCommand) {
+    // COMPATIBILITY FIX: Handle both "action" and "type" fields
+    const actionType = actionCommand.action || actionCommand.type
+    
     console.log("🎯 AI Assistant: Executing action:", {
-      action: actionCommand.action,
+      action: actionType,
+      originalAction: actionCommand.action,
+      originalType: actionCommand.type,
       id: actionCommand.id || actionCommand.command_id,
       selector: actionCommand.selector,
       xpath: actionCommand.xpath,
       value: actionCommand.value,
       text: actionCommand.text,
-      options: actionCommand.options
+      options: actionCommand.options,
+      scroll_direction: actionCommand.scroll_direction,
+      scroll_amount: actionCommand.scroll_amount
     })
+    
+    if (!actionType) {
+      console.error("❌ AI Assistant: No action type found in command:", actionCommand)
+      return { success: false, error: "No action type specified", action_id: actionCommand.command_id || actionCommand.id }
+    }
     
     try {
       // Some actions don't need elements
-      const needsElement = !["scroll", "wait", "navigate"].includes(actionCommand.action)
+      const needsElement = !["scroll", "wait", "navigate"].includes(actionType)
       const element = needsElement ? findElement(actionCommand) : null
       
       if (needsElement && !element) {
-        const error = `Element not found for action: ${actionCommand.action}`
+        const error = `Element not found for action: ${actionType}`
         console.error("❌ AI Assistant:", error)
         return { success: false, error: error, action_id: actionCommand.command_id || actionCommand.id }
       }
@@ -136,7 +148,7 @@
       }
       
       // Execute action based on type
-      switch (actionCommand.action) {
+      switch (actionType) {
         case "click":
           element.click()
           console.log("✅ AI Assistant: Clicked element")
@@ -177,14 +189,20 @@
             element.scrollIntoView({ behavior: 'smooth', block: 'center' })
             console.log("✅ AI Assistant: Scrolled to element")
           } else {
-            // Scroll page
-            const direction = actionCommand.options?.direction || actionCommand.direction || "down"
-            const amount = actionCommand.options?.amount || actionCommand.amount || 300
+            // Scroll page - handle multiple direction/amount field formats
+            const direction = actionCommand.scroll_direction || actionCommand.options?.direction || actionCommand.direction || "down"
+            const amount = actionCommand.amount || actionCommand.options?.amount || (actionCommand.scroll_amount * 100) || 300
+            
+            console.log(`🎯 AI Assistant: Scrolling ${direction} by ${amount}px (scroll_amount: ${actionCommand.scroll_amount})`)
             
             if (direction === "down") {
               window.scrollBy(0, amount)
             } else if (direction === "up") {
               window.scrollBy(0, -amount)
+            } else if (direction === "left") {
+              window.scrollBy(-amount, 0)
+            } else if (direction === "right") {
+              window.scrollBy(amount, 0)
             }
             console.log(`✅ AI Assistant: Scrolled ${direction} by ${amount}px`)
           }
@@ -275,12 +293,12 @@
           }
           
         default:
-          throw new Error(`Unknown action type: ${actionCommand.action}`)
+          throw new Error(`Unknown action type: ${actionType}`)
       }
       
       return { 
         success: true, 
-        message: `${actionCommand.action} executed successfully`,
+        message: `${actionType} executed successfully`,
         action_id: actionCommand.command_id || actionCommand.id,
         element_found: needsElement ? true : null
       }
@@ -324,7 +342,9 @@
     
     console.log(`🎯 AI Assistant: Executing ${actions.length} actions:`)
     actions.forEach((action, index) => {
-      console.log(`  ${index + 1}. ${action.action}: ${action.options?.description || 'No description'}`)
+      const actionType = action.action || action.type
+      const description = action.intent || action.options?.description || 'No description'
+      console.log(`  ${index + 1}. ${actionType}: ${description}`)
     })
     
     const results = []
@@ -398,16 +418,28 @@
   function handleLiveKitDataMessage(dataMessage) {
     try {
       console.log("📨 AI Assistant: Processing LiveKit data message:", dataMessage)
+      console.log("📨 AI Assistant: Message type:", typeof dataMessage)
       
       // Parse the JSON if it's still a string
       let parsedMessage = dataMessage
       if (typeof dataMessage === 'string') {
-        parsedMessage = JSON.parse(dataMessage)
+        try {
+          parsedMessage = JSON.parse(dataMessage)
+          console.log("📨 AI Assistant: Parsed message:", parsedMessage)
+        } catch (parseError) {
+          console.error("❌ AI Assistant: Failed to parse JSON:", parseError)
+          return
+        }
       }
       
       // Check if this is an action command
       if (parsedMessage && (parsedMessage.commands || parsedMessage.actions)) {
-        console.log("🎯 AI Assistant: Executing actions from LiveKit data channel")
+        console.log("🎯 AI Assistant: Found action commands, executing from LiveKit data channel")
+        console.log("🎯 AI Assistant: Actions found:", parsedMessage.actions?.length || parsedMessage.commands?.length || 0)
+        executeActions(parsedMessage)
+      } else if (parsedMessage && parsedMessage.type === 'execute_actions') {
+        console.log("🎯 AI Assistant: Found execute_actions type, processing...")
+        console.log("🎯 AI Assistant: Actions found:", parsedMessage.actions?.length || 0)
         executeActions(parsedMessage)
       } else if (parsedMessage && parsedMessage.type === 'conversational_response') {
         console.log("💬 AI Assistant: Received conversational response:", parsedMessage.message)
@@ -421,9 +453,11 @@
         }
       } else {
         console.log("❓ AI Assistant: Unknown LiveKit data message format:", parsedMessage)
+        console.log("❓ AI Assistant: Message keys:", Object.keys(parsedMessage || {}))
       }
     } catch (e) {
       console.error("❌ AI Assistant: Error handling LiveKit data message:", e)
+      console.error("❌ AI Assistant: Original message:", dataMessage)
     }
   }
 
