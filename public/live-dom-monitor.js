@@ -36,11 +36,24 @@
       // Create unique ID based on element characteristics
       const tag = element.tagName.toLowerCase()
       const id = element.id || ''
-      const classes = Array.from(element.classList).join('.')
-      const text = this.getElementText(element).slice(0, 50)
+      
+      // OPTIMIZED: Only use first 2 most meaningful CSS classes instead of all
+      const allClasses = Array.from(element.classList)
+      const meaningfulClasses = allClasses
+        .filter(cls => 
+          !cls.match(/^(flex|items|justify|gap|rounded|text|font|transition|focus|hover|disabled|pointer|opacity|size|shrink)/) &&
+          cls.length < 20 && 
+          !cls.includes('-')
+        )
+        .slice(0, 2)
+        .join('.')
+      
+      // OPTIMIZED: Shorter text for ID
+      const text = this.getElementText(element).slice(0, 20).replace(/[^a-zA-Z0-9]/g, '')
       const position = this.getElementPosition(element)
       
-      return `${tag}_${id}_${classes}_${text}_${position.x}_${position.y}`.replace(/[^a-zA-Z0-9_]/g, '_')
+      // OPTIMIZED: Much shorter ID format
+      return `${tag}_${id}_${meaningfulClasses}_${text}_${position.x}_${position.y}`.replace(/[^a-zA-Z0-9_]/g, '_').replace(/_+/g, '_')
     }
 
     getElementText(element) {
@@ -1465,29 +1478,36 @@
           const elementData = match.element
           const domElement = elementData.element
           
-          // Create serializable version without DOM element reference
+          // OPTIMIZED: Create minimal serializable version without excessive debug data
           const serializableElement = {
             elementId: elementData.id || match.elementId,
             tagName: elementData.tagName,
             text: elementData.text,
             role: elementData.role,
-            selectors: elementData.selectors || [],
-            attributes: elementData.attributes || {},
-            position: elementData.position || {},
+            confidence: match.confidence || 0.8,
+            position: {
+              x: Math.round(elementData.position.x),
+              y: Math.round(elementData.position.y),
+              width: Math.round(elementData.position.width),
+              height: Math.round(elementData.position.height)
+            },
             visibility: elementData.visibility,
             interactable: elementData.interactable,
-            accessibilityInfo: elementData.accessibilityInfo || {},
-            confidence: match.confidence || 0.8,
-            totalScore: match.totalScore || 0,
-            scores: match.scores || {},
-            validated: match.validated || false,
-            timestamp: match.timestamp || Date.now(),
-            // Add computed properties for better action execution
-            href: domElement?.href || null,
-            value: domElement?.value || null,
-            type: domElement?.type || null,
-            disabled: domElement?.disabled || false,
-            readonly: domElement?.readOnly || false
+            selectors: elementData.selectors.slice(0, 3), // Limit to top 3 selectors
+            attributes: {
+              id: elementData.attributes.id || '',
+              className: elementData.attributes.className || '',
+              href: elementData.attributes.href || '',
+              src: elementData.attributes.src || '',
+              alt: elementData.attributes.alt || '',
+              title: elementData.attributes.title || '',
+              placeholder: elementData.attributes.placeholder || '',
+              type: elementData.attributes.type || '',
+              name: elementData.attributes.name || '',
+              ariaLabel: elementData.attributes['aria-label'] || '',
+              role: elementData.attributes.role || ''
+            }
+            // REMOVED: debug section, totalScore, scores, validated, timestamp, href, value, type, disabled, readonly
           }
           
           serializable.push(serializableElement)
@@ -1498,8 +1518,8 @@
         }
       }
       
-             return serializable
-     }
+      return serializable
+    }
 
     serializeRawElementsForTransport(elements) {
       const serializable = []
