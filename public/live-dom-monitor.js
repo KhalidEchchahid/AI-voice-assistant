@@ -37,23 +37,29 @@
       const tag = element.tagName.toLowerCase()
       const id = element.id || ''
       
-      // OPTIMIZED: Only use first 2 most meaningful CSS classes instead of all
+      // FIXED: Less aggressive CSS class filtering - keep more meaningful classes
       const allClasses = Array.from(element.classList)
       const meaningfulClasses = allClasses
         .filter(cls => 
-          !cls.match(/^(flex|items|justify|gap|rounded|text|font|transition|focus|hover|disabled|pointer|opacity|size|shrink)/) &&
-          cls.length < 20 && 
-          !cls.includes('-')
+          // Only exclude obvious utility classes, keep structural classes
+          !cls.match(/^(flex|items-|justify-|gap-|rounded|text-|font-|transition|focus|hover|disabled|pointer-|opacity-|w-|h-|p-|m-|bg-|border-)/) &&
+          cls.length < 30 && // Increased length limit
+          cls.length > 1    // Keep classes with reasonable length
         )
-        .slice(0, 2)
+        .slice(0, 3) // Allow up to 3 classes for better uniqueness
         .join('.')
       
       // OPTIMIZED: Shorter text for ID
       const text = this.getElementText(element).slice(0, 20).replace(/[^a-zA-Z0-9]/g, '')
       const position = this.getElementPosition(element)
       
-      // OPTIMIZED: Much shorter ID format
-      return `${tag}_${id}_${meaningfulClasses}_${text}_${position.x}_${position.y}`.replace(/[^a-zA-Z0-9_]/g, '_').replace(/_+/g, '_')
+      // OPTIMIZED: Much shorter ID format with better uniqueness
+      const baseId = `${tag}_${id}_${meaningfulClasses}_${text}_${position.x}_${position.y}`.replace(/[^a-zA-Z0-9_]/g, '_').replace(/_+/g, '_')
+      
+      // Ensure uniqueness by adding element hash if needed
+      const elementHash = element.outerHTML ? element.outerHTML.slice(0, 50).replace(/[^a-zA-Z0-9]/g, '').slice(-8) : Math.random().toString(36).slice(-6)
+      
+      return `${baseId}_${elementHash}`.slice(0, 100) // Limit total length but ensure uniqueness
     }
 
     getElementText(element) {
@@ -497,6 +503,7 @@
 
     findByIntent(intent) {
       console.log("🔍 DOM Monitor: Starting intent search:", { intent });
+      console.log("🔍 DOM Monitor: Current cache size:", this.cache.size);
       
       // ENHANCED: Better intent validation and fallback handling
       if (!intent || intent === 'undefined' || typeof intent !== 'string') {
@@ -522,36 +529,83 @@
       const intentLower = intent.toLowerCase()
       const results = new Map()
       
-      // Text-based search
+      // ENHANCED: Extract more keywords from the intent
       const words = intentLower.split(/\s+/).filter(word => word.length > 2)
       console.log("🔍 DOM Monitor: Search words extracted:", words);
       
-      for (const word of words) {
+      // ENHANCED: Better keyword extraction - include key terms like "about", "section", etc.
+      const keyTerms = [];
+      
+      // Add original words
+      keyTerms.push(...words);
+      
+      // Add semantic variations
+      if (intentLower.includes('about')) keyTerms.push('about');
+      if (intentLower.includes('section')) keyTerms.push('section');
+      if (intentLower.includes('click')) keyTerms.push('click', 'button', 'link');
+      if (intentLower.includes('menu')) keyTerms.push('menu', 'nav', 'navigation');
+      if (intentLower.includes('contact')) keyTerms.push('contact');
+      if (intentLower.includes('home')) keyTerms.push('home');
+      
+      console.log("🔍 DOM Monitor: Key terms for search:", keyTerms);
+      
+      // Text-based search with enhanced matching
+      for (const searchTerm of keyTerms) {
+        console.log("🔍 DOM Monitor: Searching for term:", searchTerm);
+        
         for (const [indexedWord, elementIds] of this.textIndex.entries()) {
-          if (indexedWord.includes(word) || word.includes(indexedWord)) {
+          let matchFound = false;
+          
+          // Exact match
+          if (indexedWord === searchTerm) {
+            matchFound = true;
+          }
+          // Contains match
+          else if (indexedWord.includes(searchTerm) || searchTerm.includes(indexedWord)) {
+            matchFound = true;
+          }
+          // Partial match for longer words
+          else if (searchTerm.length > 3 && indexedWord.length > 3) {
+            const overlap = this.getStringOverlap(searchTerm, indexedWord);
+            if (overlap >= Math.min(searchTerm.length, indexedWord.length) * 0.6) {
+              matchFound = true;
+            }
+          }
+          
+          if (matchFound) {
             console.log("🔍 DOM Monitor: Text match found:", { 
-              searchWord: word, 
+              searchTerm: searchTerm, 
               indexedWord: indexedWord, 
               elementCount: elementIds.size 
             });
             
             for (const elementId of elementIds) {
               const element = this.cache.get(elementId)
-              if (element && element.visibility && element.interactable) {
-                const score = this.calculateTextScore(word, indexedWord)
-                this.addToResults(results, elementId, score, 'text')
-                console.log("🎯 DOM Monitor: Added text match:", {
-                  elementId: elementId.slice(0, 20) + '...',
-                  text: element.text.slice(0, 30),
-                  score: score
-                });
+              if (element) {
+                // More permissive visibility check for broader search
+                if (element.visibility && element.interactable) {
+                  const score = this.calculateTextScore(searchTerm, indexedWord)
+                  this.addToResults(results, elementId, score, 'text')
+                  console.log("🎯 DOM Monitor: Added text match:", {
+                    elementId: elementId.slice(0, 30) + '...',
+                    text: element.text.slice(0, 30),
+                    score: score
+                  });
+                } else {
+                  console.log("🔍 DOM Monitor: Element found but not visible/interactable:", {
+                    elementId: elementId.slice(0, 30) + '...',
+                    text: element.text.slice(0, 30),
+                    visible: element.visibility,
+                    interactable: element.interactable
+                  });
+                }
               }
             }
           }
         }
       }
       
-      // Role-based search
+      // Role-based search with enhanced mapping
       const roleKeywords = {
         'click': ['button', 'link'],
         'type': ['input', 'textarea'],
@@ -559,7 +613,11 @@
         'submit': ['button', 'form'],
         'check': ['checkbox'],
         'scroll': ['generic'],
-        'show': ['button', 'link', 'input', 'textarea', 'select'], // For "show everything"
+        'about': ['button', 'link'], // Map "about" to clickable elements
+        'section': ['button', 'link', 'generic'], // Sections might be clickable
+        'menu': ['button', 'link'],
+        'navigation': ['link', 'button'],
+        'show': ['button', 'link', 'input', 'textarea', 'select'],
         'everything': ['button', 'link', 'input', 'textarea', 'select', 'form'],
         'all': ['button', 'link', 'input', 'textarea', 'select', 'form']
       }
@@ -582,7 +640,7 @@
                   const score = 0.8
                   this.addToResults(results, elementId, score, 'role')
                   console.log("🎯 DOM Monitor: Added role match:", {
-                    elementId: elementId.slice(0, 20) + '...',
+                    elementId: elementId.slice(0, 30) + '...',
                     role: role,
                     text: element.text.slice(0, 30),
                     score: score
@@ -602,12 +660,38 @@
       console.log("✅ DOM Monitor: Search completed:", {
         intent: intent,
         totalResults: finalResults.length,
+        cacheSize: this.cache.size,
+        textIndexSize: this.textIndex.size,
+        roleIndexSize: this.roleIndex.size,
         topResults: finalResults.slice(0, 3).map(r => ({
           text: r.element.text.slice(0, 30),
           score: r.totalScore,
-          confidence: r.confidence
+          confidence: r.confidence,
+          elementId: r.elementId.slice(0, 30) + '...'
         }))
       });
+      
+      // DEBUG: If no results found, show what's available in cache
+      if (finalResults.length === 0) {
+        console.warn("⚠️ DOM Monitor: No results found for intent:", intent);
+        console.log("🔍 DOM Monitor: Available elements in cache:");
+        let count = 0;
+        for (const [elementId, data] of this.cache.entries()) {
+          if (count < 10 && data.visibility && data.interactable) {
+            console.log(`  ${count+1}. ${data.tagName} - "${data.text.slice(0, 40)}" - Role: ${data.role}`);
+            count++;
+          }
+        }
+        
+        console.log("🔍 DOM Monitor: Available text index entries:");
+        count = 0;
+        for (const [word, elementIds] of this.textIndex.entries()) {
+          if (count < 10) {
+            console.log(`  ${count+1}. "${word}" -> ${elementIds.size} elements`);
+            count++;
+          }
+        }
+      }
       
       return finalResults;
     }
@@ -799,8 +883,11 @@
         });
       } else {
         console.warn("⚠️ DOM Monitor: No elements found with standard selectors, trying broader search...");
-        
-        // Try broader search if no elements found
+      }
+
+      // Try broader search if no elements found
+      if (elements.length === 0) {
+        console.log("🔍 DOM Monitor: Performing broader element search...");
         const allElements = document.querySelectorAll('*');
         const clickableElements = Array.from(allElements).filter(el => {
           return el.onclick || 
@@ -815,12 +902,22 @@
         
         console.log("🔍 DOM Monitor: Broader search found:", clickableElements.length, "potentially clickable elements");
         if (clickableElements.length > 0) {
-          clickableElements.slice(0, 5).forEach((el, i) => {
-            console.log(`  ${i+1}. ${el.tagName} - "${(el.textContent || el.value || el.id || 'no text').slice(0, 30)}" - Reason: ${el.onclick ? 'onclick' : el.tagName === 'A' ? 'link' : el.tagName === 'BUTTON' ? 'button' : 'other'}`);
+          // Add these elements to the processing
+          clickableElements.slice(0, 20).forEach((el, i) => {
+            const elementId = this.cache.addElement(el)
+            if (elementId) {
+              addedCount++;
+              if (this.intersectionObserver) {
+                this.intersectionObserver.observe(el)
+              }
+            } else {
+              skippedCount++;
+            }
           });
         }
       }
       
+      // Process normal elements
       for (const element of elements) {
         const elementId = this.cache.addElement(element)
         if (elementId) {
@@ -844,10 +941,22 @@
           selector: this.cache.selectorIndex.size
         }
       });
+
+      // DEBUG: Log some cached elements for verification
+      if (this.cache.cache.size > 0) {
+        console.log("🔍 DOM Monitor: Sample cached elements:");
+        let count = 0;
+        for (const [elementId, data] of this.cache.cache.entries()) {
+          if (count < 5) {
+            console.log(`  ${count+1}. ${data.tagName} - "${data.text.slice(0, 30)}" - Role: ${data.role} - Visible: ${data.visibility} - Interactable: ${data.interactable}`);
+            count++;
+          }
+        }
+      }
       
       // Force a refresh if we didn't find many elements
       if (addedCount < 5) {
-        console.warn("⚠️ DOM Monitor: Found very few elements, forcing broader scan...");
+        console.warn("⚠️ DOM Monitor: Found very few elements, scheduling broader scan...");
         setTimeout(() => {
           this.forceBroaderScan();
         }, 1000);
