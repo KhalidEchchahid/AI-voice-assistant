@@ -88,23 +88,148 @@
     return null
   }
   
-  // Highlight element with red border
-  function highlightElement(element) {
-    if (!element || !element.style) return
+  // Animated mouse pointer with cool click effects
+  function showAnimatedCursor(element) {
+    if (!element) return
     
-    // Store original border for restoration
-    const originalBorder = element.style.border
-    const originalBoxShadow = element.style.boxShadow
+    // Create animated cursor
+    const cursor = document.createElement('div')
+    cursor.className = 'ai-animated-cursor'
+    cursor.innerHTML = `
+      <div class="cursor-pointer">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5.5 3L5.5 19L9.5 15L12.5 18.5L15 17L12 13.5L18.5 7L5.5 3Z" fill="currentColor"/>
+          <path d="M5.5 3L5.5 19L9.5 15L12.5 18.5L15 17L12 13.5L18.5 7L5.5 3Z" stroke="white" stroke-width="1"/>
+        </svg>
+      </div>
+      <div class="cursor-trail"></div>
+    `
     
-    // Apply highlight
-    element.style.border = "2px solid #FF0000"
-    element.style.boxShadow = "0 0 8px rgba(255, 0, 0, 0.5)"
+    // Style the cursor
+    Object.assign(cursor.style, {
+      position: 'fixed',
+      left: '100px',
+      top: '100px',
+      width: '24px',
+      height: '24px',
+      zIndex: '999999',
+      pointerEvents: 'none',
+      transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+      transform: 'translate(-50%, -50%)',
+      color: '#3B82F6'
+    })
     
-    // Remove highlight after delay
+    document.body.appendChild(cursor)
+    
+    // Get target position
+    const rect = element.getBoundingClientRect()
+    const targetX = rect.left + rect.width / 2
+    const targetY = rect.top + rect.height / 2
+    
+    // Add floating animation while moving
+    cursor.style.animation = 'cursorFloat 0.8s ease-in-out'
+    
+    // Animate to target
     setTimeout(() => {
-      element.style.border = originalBorder
-      element.style.boxShadow = originalBoxShadow
-    }, 1500)
+      cursor.style.left = targetX + 'px'
+      cursor.style.top = targetY + 'px'
+      cursor.style.transform = 'translate(-50%, -50%) scale(1.2)'
+    }, 100)
+    
+    // Click animation after reaching target
+    setTimeout(() => {
+      performClickAnimation(cursor, targetX, targetY)
+    }, 900)
+    
+    // Remove cursor
+    setTimeout(() => {
+      cursor.style.opacity = '0'
+      cursor.style.transform = 'translate(-50%, -50%) scale(0.5)'
+      setTimeout(() => cursor.remove(), 500)
+    }, 2200)
+  }
+  
+  // Cool click animation effects
+  function performClickAnimation(cursor, x, y) {
+    // Scale down cursor for "press" effect
+    cursor.style.transform = 'translate(-50%, -50%) scale(0.9)'
+    cursor.style.transition = 'all 0.1s ease-out'
+    
+    // Create multiple ripple effects
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => {
+        createRippleEffect(x, y, i)
+      }, i * 100)
+    }
+    
+    // Create particle burst
+    setTimeout(() => {
+      createParticleBurst(x, y)
+    }, 150)
+    
+    // Scale back up
+    setTimeout(() => {
+      cursor.style.transform = 'translate(-50%, -50%) scale(1.2)'
+      cursor.style.transition = 'all 0.2s ease-out'
+    }, 150)
+  }
+  
+  // Create ripple effect
+  function createRippleEffect(x, y, delay) {
+    const ripple = document.createElement('div')
+    ripple.className = 'click-ripple'
+    
+    Object.assign(ripple.style, {
+      position: 'fixed',
+      left: x + 'px',
+      top: y + 'px',
+      width: '10px',
+      height: '10px',
+      background: `rgba(59, 130, 246, ${0.8 - delay * 0.2})`,
+      borderRadius: '50%',
+      transform: 'translate(-50%, -50%) scale(0)',
+      zIndex: '999998',
+      pointerEvents: 'none',
+      animation: `clickRipple ${0.8 + delay * 0.2}s ease-out forwards`
+    })
+    
+    document.body.appendChild(ripple)
+    setTimeout(() => ripple.remove(), 1000 + delay * 200)
+  }
+  
+  // Create particle burst effect
+  function createParticleBurst(x, y) {
+    const particleCount = 12
+    
+    for (let i = 0; i < particleCount; i++) {
+      const particle = document.createElement('div')
+      particle.className = 'click-particle'
+      
+      const angle = (360 / particleCount) * i
+      const velocity = 40 + Math.random() * 20
+      const size = 3 + Math.random() * 3
+      
+      Object.assign(particle.style, {
+        position: 'fixed',
+        left: x + 'px',
+        top: y + 'px',
+        width: size + 'px',
+        height: size + 'px',
+        background: `hsl(${220 + Math.random() * 40}, 80%, 60%)`,
+        borderRadius: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: '999997',
+        pointerEvents: 'none',
+        animation: `particleBurst 0.8s ease-out forwards`
+      })
+      
+      // Set CSS variables for animation
+      particle.style.setProperty('--angle', angle + 'deg')
+      particle.style.setProperty('--velocity', velocity + 'px')
+      
+      document.body.appendChild(particle)
+      setTimeout(() => particle.remove(), 800)
+    }
   }
   
   // Execute individual action
@@ -142,9 +267,9 @@
         return { success: false, error: error, action_id: actionCommand.command_id || actionCommand.id }
       }
       
-      // Highlight element if requested and element exists
+      // Show animated cursor if requested and element exists
       if (element && actionCommand.options?.highlight !== false) {
-        highlightElement(element)
+        showAnimatedCursor(element)
       }
       
       // Execute action based on type
@@ -424,7 +549,7 @@
       let parsedMessage = dataMessage
       if (typeof dataMessage === 'string') {
         try {
-          parsedMessage = JSON.parse(dataMessage)
+        parsedMessage = JSON.parse(dataMessage)
           console.log("📨 AI Assistant: Parsed message:", parsedMessage)
         } catch (parseError) {
           console.error("❌ AI Assistant: Failed to parse JSON:", parseError)
@@ -461,6 +586,56 @@
     }
   }
 
+  // Add CSS animations for cursor effects
+  function addCursorAnimations() {
+    if (document.getElementById('ai-cursor-animations')) return
+    
+    const style = document.createElement('style')
+    style.id = 'ai-cursor-animations'
+    style.textContent = `
+      @keyframes cursorFloat {
+        0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+        50% { transform: translate(-50%, -50%) translateY(-5px); }
+      }
+      
+      @keyframes clickRipple {
+        0% {
+          transform: translate(-50%, -50%) scale(0);
+          opacity: 1;
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(8);
+          opacity: 0;
+        }
+      }
+      
+      @keyframes particleBurst {
+        0% {
+          transform: translate(-50%, -50%) rotate(var(--angle)) translateX(0) rotate(calc(-1 * var(--angle)));
+          opacity: 1;
+        }
+        100% {
+          transform: translate(-50%, -50%) rotate(var(--angle)) translateX(var(--velocity)) rotate(calc(-1 * var(--angle)));
+          opacity: 0;
+        }
+      }
+      
+      .ai-animated-cursor {
+        filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.3));
+      }
+      
+      .ai-animated-cursor .cursor-pointer {
+        animation: pulse 2s ease-in-out infinite;
+      }
+      
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+      }
+    `
+    document.head.appendChild(style)
+  }
+
   // --- Expose Helper API ---
   window.AIAssistantHelper = {
     version: HELPER_VERSION,
@@ -468,7 +643,7 @@
     executeActions: (commands) => safeExecute(() => executeActions(commands), "executeActions"),
     handleLiveKitDataMessage: (data) => safeExecute(() => handleLiveKitDataMessage(data), "handleLiveKitDataMessage"),
     findElement,
-    highlightElement,
+    showAnimatedCursor,
     // Utility functions
     isReady: () => true,
     getSupportedActions: () => [
@@ -476,6 +651,9 @@
       "check", "uncheck", "navigate", "wait", "getValue", "getText"
     ]
   }
+
+  // Initialize animations on load
+  addCursorAnimations()
 
   console.log(`✅ AI Assistant Helper: Initialization complete (v${HELPER_VERSION})`)
 })() 
