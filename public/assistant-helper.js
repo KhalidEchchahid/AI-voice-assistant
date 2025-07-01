@@ -8,7 +8,15 @@
   // Error boundary for safer execution
   function safeExecute(fn, context = "unknown") {
     try {
-      return fn()
+      const result = fn()
+      // If the function returns a promise, handle it properly
+      if (result && typeof result.then === 'function') {
+        return result.catch(error => {
+          console.error(`AI Assistant Helper: Error in ${context}:`, error)
+          return { success: false, error: error.message, context }
+        })
+      }
+      return result
     } catch (error) {
       console.error(`AI Assistant Helper: Error in ${context}:`, error)
       return { success: false, error: error.message, context }
@@ -90,63 +98,70 @@
   
   // Animated mouse pointer with cool click effects
   function showAnimatedCursor(element) {
-    if (!element) return
-    
-    // Create animated cursor
-    const cursor = document.createElement('div')
-    cursor.className = 'ai-animated-cursor'
-    cursor.innerHTML = `
-      <div class="cursor-pointer">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M5.5 3L5.5 19L9.5 15L12.5 18.5L15 17L12 13.5L18.5 7L5.5 3Z" fill="currentColor"/>
-          <path d="M5.5 3L5.5 19L9.5 15L12.5 18.5L15 17L12 13.5L18.5 7L5.5 3Z" stroke="white" stroke-width="1"/>
-        </svg>
-      </div>
-      <div class="cursor-trail"></div>
-    `
-    
-    // Style the cursor
-    Object.assign(cursor.style, {
-      position: 'fixed',
-      left: '100px',
-      top: '100px',
-      width: '24px',
-      height: '24px',
-      zIndex: '999999',
-      pointerEvents: 'none',
-      transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-      transform: 'translate(-50%, -50%)',
-      color: '#3B82F6'
+    return new Promise((resolve) => {
+      if (!element) {
+        resolve()
+        return
+      }
+      
+      // Create animated cursor
+      const cursor = document.createElement('div')
+      cursor.className = 'ai-animated-cursor'
+      cursor.innerHTML = `
+        <div class="cursor-pointer">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5.5 3L5.5 19L9.5 15L12.5 18.5L15 17L12 13.5L18.5 7L5.5 3Z" fill="currentColor"/>
+            <path d="M5.5 3L5.5 19L9.5 15L12.5 18.5L15 17L12 13.5L18.5 7L5.5 3Z" stroke="white" stroke-width="1"/>
+          </svg>
+        </div>
+        <div class="cursor-trail"></div>
+      `
+      
+      // Style the cursor
+      Object.assign(cursor.style, {
+        position: 'fixed',
+        left: '100px',
+        top: '100px',
+        width: '24px',
+        height: '24px',
+        zIndex: '999999',
+        pointerEvents: 'none',
+        transition: 'all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+        transform: 'translate(-50%, -50%)',
+        color: '#3B82F6'
+      })
+      
+      document.body.appendChild(cursor)
+      
+      // Get target position
+      const rect = element.getBoundingClientRect()
+      const targetX = rect.left + rect.width / 2
+      const targetY = rect.top + rect.height / 2
+      
+      // Add floating animation while moving
+      cursor.style.animation = 'cursorFloat 0.6s ease-in-out'
+      
+      // Animate to target
+      setTimeout(() => {
+        cursor.style.left = targetX + 'px'
+        cursor.style.top = targetY + 'px'
+        cursor.style.transform = 'translate(-50%, -50%) scale(1.2)'
+      }, 100)
+      
+      // Action should happen after cursor reaches target
+      setTimeout(() => {
+        performClickAnimation(cursor, targetX, targetY)
+        // Resolve the promise here so the actual action can be performed
+        resolve()
+      }, 700)
+      
+      // Remove cursor after click animation
+      setTimeout(() => {
+        cursor.style.opacity = '0'
+        cursor.style.transform = 'translate(-50%, -50%) scale(0.5)'
+        setTimeout(() => cursor.remove(), 500)
+      }, 2000)
     })
-    
-    document.body.appendChild(cursor)
-    
-    // Get target position
-    const rect = element.getBoundingClientRect()
-    const targetX = rect.left + rect.width / 2
-    const targetY = rect.top + rect.height / 2
-    
-    // Add floating animation while moving
-    cursor.style.animation = 'cursorFloat 0.8s ease-in-out'
-    
-    // Animate to target
-    setTimeout(() => {
-      cursor.style.left = targetX + 'px'
-      cursor.style.top = targetY + 'px'
-      cursor.style.transform = 'translate(-50%, -50%) scale(1.2)'
-    }, 100)
-    
-    // Click animation after reaching target
-    setTimeout(() => {
-      performClickAnimation(cursor, targetX, targetY)
-    }, 900)
-    
-    // Remove cursor
-    setTimeout(() => {
-      cursor.style.opacity = '0'
-      cursor.style.transform = 'translate(-50%, -50%) scale(0.5)'
-      setTimeout(() => cursor.remove(), 500)
-    }, 2200)
   }
   
   // Cool click animation effects
@@ -233,7 +248,12 @@
   }
   
   // Execute individual action
-  function executeAction(actionCommand) {
+  // NEW BEHAVIOR: Actions now follow realistic user interaction flow:
+  // 1. Cursor animates to target element (if applicable)
+  // 2. Click animation plays
+  // 3. Actual DOM action is performed
+  // This creates a more natural, human-like interaction pattern
+  async function executeAction(actionCommand) {
     // COMPATIBILITY FIX: Handle both "action" and "type" fields
     const actionType = actionCommand.action || actionCommand.type
     
@@ -267,9 +287,17 @@
         return { success: false, error: error, action_id: actionCommand.command_id || actionCommand.id }
       }
       
-      // Show animated cursor if requested and element exists
-      if (element && actionCommand.options?.highlight !== false) {
-        showAnimatedCursor(element)
+      // Show animated cursor if requested and element exists - WAIT for animation to complete
+      // Skip cursor animation for page-level scroll actions (scroll without specific target element)
+      const isPageLevelScroll = actionType === "scroll" && !element
+      const shouldShowCursor = element && 
+                              actionCommand.options?.highlight !== false && 
+                              !isPageLevelScroll
+      
+      if (shouldShowCursor) {
+        console.log("🎬 AI Assistant: Starting cursor animation...")
+        await showAnimatedCursor(element)
+        console.log("✅ AI Assistant: Cursor animation completed, now performing action")
       }
       
       // Execute action based on type
@@ -485,9 +513,9 @@
         actionDelay = actionCommand.delay_before
       }
       
-      setTimeout(() => {
+      setTimeout(async () => {
         console.log(`⏱️ AI Assistant: Executing action ${index + 1}/${actions.length} after ${currentDelay}ms delay`)
-        const result = executeAction(actionCommand)
+        const result = await executeAction(actionCommand)
         results.push(result)
         
         console.log(`${result.success ? '✅' : '❌'} AI Assistant: Action ${index + 1}/${actions.length} result:`, result)
@@ -625,7 +653,7 @@
       }
       
       .ai-animated-cursor .cursor-pointer {
-        animation: pulse 2s ease-in-out infinite;
+        animation: pulse 1.5s ease-in-out infinite;
       }
       
       @keyframes pulse {
@@ -639,7 +667,7 @@
   // --- Expose Helper API ---
   window.AIAssistantHelper = {
     version: HELPER_VERSION,
-    executeAction: (action) => safeExecute(() => executeAction(action), "executeAction"),
+    executeAction: (action) => safeExecute(async () => await executeAction(action), "executeAction"),
     executeActions: (commands) => safeExecute(() => executeActions(commands), "executeActions"),
     handleLiveKitDataMessage: (data) => safeExecute(() => handleLiveKitDataMessage(data), "handleLiveKitDataMessage"),
     findElement,
