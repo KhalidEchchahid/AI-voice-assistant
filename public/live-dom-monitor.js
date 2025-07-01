@@ -396,19 +396,90 @@
       if (!element || element.nodeType !== Node.ELEMENT_NODE) return false
       
       const tag = element.tagName.toLowerCase()
+      
+      // 🎯 ENHANCED: More comprehensive interactive tags
       const interactiveTags = [
         'button', 'a', 'input', 'select', 'textarea', 'form',
-        'details', 'summary', 'label'
+        'details', 'summary', 'label', 'fieldset', 'legend'
       ]
       
       // Check if it's an interactive tag
-      if (interactiveTags.includes(tag)) return true
+      if (interactiveTags.includes(tag)) {
+        console.log(`✅ isRelevantElement: Accepted ${tag} (interactive tag)`, {
+          id: element.id || 'none',
+          name: element.name || 'none',
+          className: element.className || 'none'
+        });
+        return true;
+      }
+      
+      // 🎯 ENHANCED: Check for form-related attributes that make elements relevant
+      if (element.hasAttribute('name')) {
+        console.log(`✅ isRelevantElement: Accepted ${tag} (has name attribute)`, {
+          name: element.getAttribute('name'),
+          id: element.id || 'none'
+        });
+        return true;
+      }
       
       // Check for interactive attributes
-      if (element.onclick || element.getAttribute('onclick')) return true
-      if (element.getAttribute('role') === 'button') return true
-      if (element.getAttribute('tabindex')) return true
-      if (element.classList.contains('btn') || element.classList.contains('button')) return true
+      if (element.onclick || element.getAttribute('onclick')) {
+        console.log(`✅ isRelevantElement: Accepted ${tag} (has onclick)`, {
+          id: element.id || 'none'
+        });
+        return true;
+      }
+      
+      // Check for role-based interactivity
+      const role = element.getAttribute('role');
+      const interactiveRoles = ['button', 'link', 'textbox', 'combobox', 'listbox', 'menuitem', 'tab'];
+      if (role && interactiveRoles.includes(role)) {
+        console.log(`✅ isRelevantElement: Accepted ${tag} (interactive role: ${role})`, {
+          id: element.id || 'none'
+        });
+        return true;
+      }
+      
+      // Check for tabindex (focusable elements)
+      if (element.hasAttribute('tabindex')) {
+        console.log(`✅ isRelevantElement: Accepted ${tag} (has tabindex)`, {
+          tabindex: element.getAttribute('tabindex'),
+          id: element.id || 'none'
+        });
+        return true;
+      }
+      
+      // Check for CSS classes that indicate interactivity
+      const classList = element.classList;
+      const interactiveClasses = ['btn', 'button', 'clickable', 'form-control', 'input', 'field'];
+      for (const cls of interactiveClasses) {
+        if (classList.contains(cls)) {
+          console.log(`✅ isRelevantElement: Accepted ${tag} (has class: ${cls})`, {
+            id: element.id || 'none',
+            className: element.className
+          });
+          return true;
+        }
+      }
+      
+      // Check for data attributes that indicate interactivity
+      const dataAttrs = ['data-action', 'data-click', 'data-toggle', 'data-target'];
+      for (const attr of dataAttrs) {
+        if (element.hasAttribute(attr)) {
+          console.log(`✅ isRelevantElement: Accepted ${tag} (has ${attr})`, {
+            id: element.id || 'none',
+            value: element.getAttribute(attr)
+          });
+          return true;
+        }
+      }
+      
+      // Log rejection for debugging
+      console.log(`❌ isRelevantElement: Rejected ${tag}`, {
+        id: element.id || 'none',
+        className: element.className || 'none',
+        reason: 'No interactive indicators found'
+      });
       
       return false
     }
@@ -916,6 +987,111 @@
         selectorIndexSize: this.selectorIndex.size
       })
     }
+
+    dumpAllCachedElements() {
+      console.log("🗃️ DOM Monitor: COMPLETE CACHE DUMP");
+      console.log("=".repeat(100));
+      
+      if (this.cache.size === 0) {
+        console.log("❌ Cache is empty - no elements cached!");
+        return;
+      }
+      
+      let inputCount = 0;
+      let buttonCount = 0;
+      let linkCount = 0;
+      let otherCount = 0;
+      
+      for (const [elementId, data] of this.cache.entries()) {
+        console.log(`🗃️ CACHED ELEMENT:`, {
+          elementId: elementId,
+          tagName: data.tagName,
+          text: data.text || 'NO_TEXT',
+          role: data.role,
+          attributes: {
+            id: data.attributes.id || 'none',
+            name: data.attributes.name || 'none',
+            type: data.attributes.type || 'none',
+            placeholder: data.attributes.placeholder || 'none',
+            'aria-label': data.attributes['aria-label'] || 'none',
+            className: data.attributes.className || 'none',
+            title: data.attributes.title || 'none',
+            value: data.attributes.value || 'none'
+          },
+          position: data.position,
+          visibility: data.visibility,
+          interactable: data.interactable,
+          selectors: data.selectors.map(s => `${s.type}: ${s.value}`),
+          updateCount: data.updateCount,
+          lastSeen: new Date(data.lastSeen).toISOString()
+        });
+        
+        // Count by type
+        if (data.tagName === 'input') inputCount++;
+        else if (data.tagName === 'button') buttonCount++;
+        else if (data.tagName === 'a') linkCount++;
+        else otherCount++;
+        
+        // Special attention to form inputs
+        if (data.tagName === 'input') {
+          console.log(`🎯 FORM INPUT DETAILS:`, {
+            name: data.attributes.name,
+            type: data.attributes.type,
+            placeholder: data.attributes.placeholder,
+            id: data.attributes.id,
+            ariaLabel: data.attributes['aria-label'],
+            searchableTerms: this.getSearchableTermsForElement(data)
+          });
+        }
+      }
+      
+      console.log("📊 CACHE SUMMARY:", {
+        total: this.cache.size,
+        inputs: inputCount,
+        buttons: buttonCount,
+        links: linkCount,
+        other: otherCount,
+        textIndexSize: this.textIndex.size,
+        roleIndexSize: this.roleIndex.size
+      });
+      
+      // Show what's in the text index
+      console.log("🔍 TEXT INDEX CONTENTS:");
+      let indexCount = 0;
+      for (const [word, elementIds] of this.textIndex.entries()) {
+        if (indexCount < 20) { // Show first 20 entries
+          console.log(`  "${word}" -> ${elementIds.size} elements`);
+          indexCount++;
+        }
+      }
+      
+      console.log("=".repeat(100));
+    }
+
+    getSearchableTermsForElement(data) {
+      const searchableTexts = [];
+      
+      if (data.text) {
+        searchableTexts.push(`text:"${data.text}"`);
+      }
+      
+      const attributes = data.attributes || {};
+      const searchableAttributes = ['name', 'placeholder', 'aria-label', 'title', 'alt', 'value'];
+      
+      for (const attrName of searchableAttributes) {
+        const attrValue = attributes[attrName];
+        if (attrValue && typeof attrValue === 'string' && attrValue.trim().length > 0) {
+          searchableTexts.push(`${attrName}:"${attrValue}"`);
+          
+          if (attrName === 'name' && /[A-Z]/.test(attrValue)) {
+            const splitWords = attrValue.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
+            searchableTexts.push(`name_split:"${splitWords}"`);
+          }
+        }
+      }
+      
+      return searchableTexts;
+    }
   }
 
   // --- DOM Observer System ---
@@ -981,10 +1157,52 @@
     observeExistingElements() {
       console.log("🔍 DOM Monitor: Starting initial element discovery...");
       
+      // 🎯 ENHANCED: More comprehensive selectors to catch all form fields
       const selectors = [
-        'button', 'a[href]', 'input', 'select', 'textarea', 'form',
-        '[onclick]', '[role="button"]', '[role="link"]', '[tabindex]',
-        '.btn', '.button', '.link', '.clickable'
+        // Form elements (critical for the missing field issue)
+        'input',           // All input fields
+        'input[type]',     // Explicitly typed inputs  
+        'select',          // Dropdown selectors
+        'textarea',        // Text areas
+        'form',            // Form containers
+        
+        // Interactive elements
+        'button',          // Buttons
+        'a[href]',         // Links with href
+        'a',               // All links (some may not have href)
+        
+        // Role-based elements
+        '[role="button"]',
+        '[role="link"]',
+        '[role="textbox"]',
+        '[role="combobox"]',
+        '[role="listbox"]',
+        '[role="menuitem"]',
+        '[role="tab"]',
+        
+        // Clickable indicators
+        '[onclick]',       // Has onclick attribute
+        '[tabindex]',      // Focusable elements
+        '[data-action]',   // Custom action attributes
+        '[data-click]',
+        '[data-toggle]',
+        
+        // CSS class indicators
+        '.btn', '.button', '.link', '.clickable',
+        '.form-control',   // Bootstrap form classes
+        '.form-input',
+        '.input',
+        '.field',
+        '.control',
+        
+        // Additional form field patterns
+        '[name]',          // Elements with name attribute (crucial!)
+        '[id*="name"]',    // IDs containing "name"
+        '[id*="email"]',   // IDs containing "email"  
+        '[id*="phone"]',   // IDs containing "phone"
+        '[class*="input"]', // Classes containing "input"
+        '[class*="field"]', // Classes containing "field"
+        '[placeholder]'    // Elements with placeholder text
       ]
       
       console.log("🔍 DOM Monitor: Using selectors:", selectors);
@@ -994,6 +1212,53 @@
       let skippedCount = 0;
       
       console.log("🔍 DOM Monitor: Found potential elements:", elements.length);
+      
+      // 🎯 ENHANCED: Log ALL found elements with their attributes for debugging
+      console.log("📋 DOM Monitor: DETAILED ELEMENT DISCOVERY LOG:");
+      console.log("=" * 80);
+      elements.forEach((element, index) => {
+        const attributes = {};
+        // Collect all attributes
+        for (let i = 0; i < element.attributes.length; i++) {
+          const attr = element.attributes[i];
+          attributes[attr.name] = attr.value;
+        }
+        
+        const elementInfo = {
+          index: index + 1,
+          tagName: element.tagName.toLowerCase(),
+          id: element.id || 'NO_ID',
+          classes: element.className || 'NO_CLASSES',
+          textContent: (element.textContent || '').trim().slice(0, 50) || 'NO_TEXT',
+          value: element.value || 'NO_VALUE',
+          type: element.type || 'NO_TYPE',
+          name: element.getAttribute('name') || 'NO_NAME',
+          placeholder: element.getAttribute('placeholder') || 'NO_PLACEHOLDER',
+          ariaLabel: element.getAttribute('aria-label') || 'NO_ARIA_LABEL',
+          title: element.getAttribute('title') || 'NO_TITLE',
+          allAttributes: attributes,
+          position: this.cache.getElementPosition(element),
+          visible: this.cache.checkVisibility(element),
+          interactable: this.cache.checkInteractability(element)
+        };
+        
+        console.log(`📋 Element ${index + 1}:`, elementInfo);
+        
+        // Special attention to form inputs
+        if (element.tagName.toLowerCase() === 'input') {
+          console.log(`🎯 FORM INPUT DETECTED:`, {
+            name: element.name,
+            type: element.type,
+            placeholder: element.placeholder,
+            id: element.id,
+            classes: element.className,
+            value: element.value,
+            ariaLabel: element.getAttribute('aria-label'),
+            formOwner: element.form?.id || 'NO_FORM'
+          });
+        }
+      });
+      console.log("=" * 80);
       
       // DEBUG: Log some sample elements found
       if (elements.length > 0) {
@@ -1038,15 +1303,30 @@
       }
       
       // Process normal elements
+      console.log("🔄 DOM Monitor: Processing elements for caching...");
       for (const element of elements) {
         const elementId = this.cache.addElement(element)
         if (elementId) {
           addedCount++;
+          console.log(`✅ CACHED Element: ${element.tagName.toLowerCase()}`, {
+            id: element.id || 'none',
+            name: element.name || 'none', 
+            type: element.type || 'none',
+            text: (element.textContent || '').trim().slice(0, 30) || 'none',
+            elementId: elementId.slice(0, 40) + '...'
+          });
           if (this.intersectionObserver) {
             this.intersectionObserver.observe(element)
           }
         } else {
           skippedCount++;
+          console.log(`❌ SKIPPED Element: ${element.tagName.toLowerCase()}`, {
+            id: element.id || 'none',
+            name: element.name || 'none',
+            type: element.type || 'none', 
+            text: (element.textContent || '').trim().slice(0, 30) || 'none',
+            reason: 'Not relevant or failed isRelevantElement check'
+          });
         }
       }
       
@@ -1061,6 +1341,9 @@
           selector: this.cache.selectorIndex.size
         }
       });
+      
+      // 🎯 ENHANCED: Dump all cached elements for debugging
+      this.cache.dumpAllCachedElements();
 
       // DEBUG: Log some cached elements for verification
       if (this.cache.cache.size > 0) {
@@ -1115,6 +1398,9 @@
       
       console.log(`✅ DOM Monitor: Broader scan found ${foundCount} additional interactive elements`);
       console.log(`📊 DOM Monitor: Total cache size now: ${this.cache.cache.size}`);
+      
+      // Dump all cached elements for debugging
+      this.cache.dumpAllCachedElements();
     }
 
     handleMutations(mutations) {
@@ -1180,10 +1466,14 @@
         elements.push(rootElement)
       }
       
+      // Use the same comprehensive selectors as observeExistingElements
       const selectors = [
-        'button', 'a[href]', 'input', 'select', 'textarea',
-        '[onclick]', '[role="button"]', '[tabindex]',
-        '.btn', '.button', '.link'
+        'input', 'input[type]', 'select', 'textarea', 'form',
+        'button', 'a[href]', 'a',
+        '[role="button"]', '[role="link"]', '[role="textbox"]',
+        '[onclick]', '[tabindex]', '[data-action]',
+        '.btn', '.button', '.link', '.clickable', '.form-control',
+        '[name]', '[id*="name"]', '[id*="email"]', '[placeholder]'
       ]
       
       const found = rootElement.querySelectorAll(selectors.join(','))
@@ -1931,6 +2221,13 @@
       monitor.cache.forceReindexAllElements();
       return { success: true, message: "Re-indexing completed" };
     }, "forceReindex"),
+    
+    // 🎯 ENHANCED: Dump all cached elements for debugging
+    dumpCache: () => safeExecute(() => {
+      console.log("🗃️ DOM Monitor API: dumpCache called");
+      monitor.cache.dumpAllCachedElements();
+      return { success: true, message: "Cache dump completed - check console logs" };
+    }, "dumpCache"),
     
     getAllElements: (filter = {}) => safeExecute(() => {
       console.log("📋 DOM Monitor API: getAllElements called:", { filter });
