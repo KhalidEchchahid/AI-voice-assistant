@@ -414,14 +414,56 @@
     }
 
     updateSearchIndexes(elementId, data) {
-      // Text index
-      const text = data.text.toLowerCase()
-      if (text) {
-        const words = text.split(/\s+/).filter(word => word.length > 2)
+      // ENHANCED: Text index from multiple sources
+      const searchableTexts = []
+      
+      // Add element text content
+      if (data.text) {
+        searchableTexts.push(data.text.toLowerCase())
+      }
+      
+      // CRITICAL FIX: Add attribute-based text for form fields
+      const attributes = data.attributes || {}
+      const searchableAttributes = [
+        'name',          // "FirstName" -> first, name
+        'placeholder',   // "Enter your first name" -> first, name
+        'aria-label',    // "First Name Field" -> first, name, field  
+        'title',         // "Your first name" -> first, name
+        'alt',           // Alt text for images
+        'value',         // Current value
+        'label'          // Associated label text
+      ]
+      
+      for (const attrName of searchableAttributes) {
+        const attrValue = attributes[attrName]
+        if (attrValue && typeof attrValue === 'string' && attrValue.trim().length > 0) {
+          searchableTexts.push(attrValue.toLowerCase())
+          
+          // For camelCase attributes like "FirstName", split into words
+          if (attrName === 'name' && /[A-Z]/.test(attrValue)) {
+            const splitWords = attrValue.replace(/([A-Z])/g, ' $1').trim().toLowerCase()
+            searchableTexts.push(splitWords)
+          }
+        }
+      }
+      
+      // Index all searchable text
+      const allSearchableText = searchableTexts.join(' ')
+      if (allSearchableText.trim()) {
+        const words = allSearchableText.split(/\s+/).filter(word => word.length > 2)
+        
         for (const word of words) {
           if (!this.textIndex.has(word)) this.textIndex.set(word, new Set())
           this.textIndex.get(word).add(elementId)
         }
+        
+        console.log("📝 DOM Monitor: Indexed element for text search:", {
+          elementId: elementId.slice(0, 30) + '...',
+          tagName: data.tagName,
+          searchableWords: words.slice(0, 5), // Show first 5 words
+          totalWords: words.length,
+          sources: searchableTexts.length
+        });
       }
       
       // Role index
@@ -471,10 +513,31 @@
     }
 
     removeFromSearchIndexes(elementId, data) {
-      // Remove from text index
-      const text = data.text.toLowerCase()
-      if (text) {
-        const words = text.split(/\s+/).filter(word => word.length > 2)
+      // Remove from enhanced text index (same logic as updateSearchIndexes)
+      const searchableTexts = []
+      
+      if (data.text) {
+        searchableTexts.push(data.text.toLowerCase())
+      }
+      
+      const attributes = data.attributes || {}
+      const searchableAttributes = ['name', 'placeholder', 'aria-label', 'title', 'alt', 'value', 'label']
+      
+      for (const attrName of searchableAttributes) {
+        const attrValue = attributes[attrName]
+        if (attrValue && typeof attrValue === 'string' && attrValue.trim().length > 0) {
+          searchableTexts.push(attrValue.toLowerCase())
+          
+          if (attrName === 'name' && /[A-Z]/.test(attrValue)) {
+            const splitWords = attrValue.replace(/([A-Z])/g, ' $1').trim().toLowerCase()
+            searchableTexts.push(splitWords)
+          }
+        }
+      }
+      
+      const allSearchableText = searchableTexts.join(' ')
+      if (allSearchableText.trim()) {
+        const words = allSearchableText.split(/\s+/).filter(word => word.length > 2)
         for (const word of words) {
           const wordSet = this.textIndex.get(word)
           if (wordSet) {
@@ -664,7 +727,7 @@
       // Add semantic variations and synonyms
       const enhancedKeywords = [...words];
       
-      // Common semantic mappings for better element matching
+      // ENHANCED: Common semantic mappings for better element matching
       const semanticMaps = {
         'about': ['about', 'about us', 'company', 'info', 'information', 'who we are'],
         'contact': ['contact', 'contact us', 'get in touch', 'support', 'help'],
@@ -673,7 +736,22 @@
         'menu': ['menu', 'navigation', 'nav', 'options'],
         'home': ['home', 'main', 'start', 'welcome'],
         'submit': ['submit', 'send', 'go', 'continue', 'proceed'],
-        'cancel': ['cancel', 'back', 'close', 'exit']
+        'cancel': ['cancel', 'back', 'close', 'exit'],
+        
+        // CRITICAL: Form field semantic mappings
+        'first': ['first', 'firstname', 'first_name', 'fname', 'given', 'forename'],
+        'last': ['last', 'lastname', 'last_name', 'lname', 'surname', 'family'],
+        'name': ['name', 'fullname', 'full_name', 'your_name', 'username'],
+        'email': ['email', 'e-mail', 'mail', 'email_address', 'e_mail'],
+        'phone': ['phone', 'telephone', 'tel', 'mobile', 'cell', 'number'],
+        'password': ['password', 'pass', 'pwd', 'passcode', 'secret'],
+        'message': ['message', 'comment', 'note', 'feedback', 'inquiry'],
+        'company': ['company', 'organization', 'business', 'employer', 'firm'],
+        'address': ['address', 'location', 'street', 'addr', 'where'],
+        'zip': ['zip', 'postal', 'postcode', 'zipcode', 'postal_code'],
+        'city': ['city', 'town', 'municipality', 'location'],
+        'state': ['state', 'province', 'region', 'territory'],
+        'country': ['country', 'nation', 'nationality']
       };
       
       // Add semantic variations
@@ -816,6 +894,27 @@
       if (toRemove.length > 0) {
         console.log(`🔄 DOM Monitor: Cleaned up ${toRemove.length} stale elements`)
       }
+    }
+
+    forceReindexAllElements() {
+      console.log("🔄 DOM Monitor: Force re-indexing all elements with enhanced attribute search...")
+      
+      // Clear existing indexes
+      this.textIndex.clear()
+      this.roleIndex.clear()
+      this.selectorIndex.clear()
+      
+      // Re-index all cached elements with enhanced logic
+      for (const [elementId, data] of this.cache.entries()) {
+        this.updateSearchIndexes(elementId, data)
+      }
+      
+      console.log("✅ DOM Monitor: Re-indexing complete", {
+        totalElements: this.cache.size,
+        textIndexSize: this.textIndex.size,
+        roleIndexSize: this.roleIndex.size,
+        selectorIndexSize: this.selectorIndex.size
+      })
     }
   }
 
@@ -1505,6 +1604,12 @@
         console.log("👁️ DOM Monitor: Starting element observation...");
         this.observer.startWatching()
         
+        // ENHANCED: Force re-index after initial observation to ensure attribute search works
+        if (this.cache.cache.size > 0) {
+          console.log("🔄 DOM Monitor: Re-indexing elements with enhanced attribute search...");
+          this.cache.forceReindexAllElements();
+        }
+        
         // Setup cleanup routine
         console.log("🧹 DOM Monitor: Setting up cleanup routine...");
         this.startCleanupRoutine()
@@ -1819,6 +1924,13 @@
       });
       return validatedMatches;
     }, "findElements"),
+
+    // ENHANCED: Force re-index with new attribute-based search
+    forceReindex: () => safeExecute(() => {
+      console.log("🔄 DOM Monitor API: forceReindex called");
+      monitor.cache.forceReindexAllElements();
+      return { success: true, message: "Re-indexing completed" };
+    }, "forceReindex"),
     
     getAllElements: (filter = {}) => safeExecute(() => {
       console.log("📋 DOM Monitor API: getAllElements called:", { filter });
