@@ -502,108 +502,69 @@
     }
 
     findByIntent(intent) {
-      console.log("🔍 DOM Monitor: Starting intent search:", { intent });
+      console.log("🔍 DOM Monitor: Starting enhanced intent search:", { intent });
       console.log("🔍 DOM Monitor: Current cache size:", this.cache.size);
       
       // ENHANCED: Better intent validation and fallback handling
       if (!intent || intent === 'undefined' || typeof intent !== 'string') {
         console.warn("⚠️ DOM Monitor: Invalid intent provided:", intent, "- using fallback to show all elements");
-        // Return all visible interactive elements as fallback
-        const fallbackResults = [];
-        for (const [elementId, data] of this.cache.entries()) {
-          if (data.visibility && data.interactable) {
-            fallbackResults.push({
-              elementId,
-              element: data,
-              scores: { fallback: 0.5 },
-              totalScore: 0.5,
-              confidence: 0.5
-            });
-          }
-        }
-        
-        console.log("✅ DOM Monitor: Fallback search returned:", fallbackResults.length, "elements");
-        return fallbackResults.sort((a, b) => b.element.lastSeen - a.element.lastSeen).slice(0, 10);
+        return this._getFallbackElements();
       }
       
       const intentLower = intent.toLowerCase()
       const results = new Map()
       
-      // ENHANCED: Extract more keywords from the intent
-      const words = intentLower.split(/\s+/).filter(word => word.length > 2)
-      console.log("🔍 DOM Monitor: Search words extracted:", words);
+      // ENHANCED: Better keyword extraction with semantic understanding
+      const extractedKeywords = this._extractSemanticKeywords(intentLower);
+      console.log("🔍 DOM Monitor: Extracted semantic keywords:", extractedKeywords);
       
-      // ENHANCED: Better keyword extraction - include key terms like "about", "section", etc.
-      const keyTerms = [];
-      
-      // Add original words
-      keyTerms.push(...words);
-      
-      // Add semantic variations
-      if (intentLower.includes('about')) keyTerms.push('about');
-      if (intentLower.includes('section')) keyTerms.push('section');
-      if (intentLower.includes('click')) keyTerms.push('click', 'button', 'link');
-      if (intentLower.includes('menu')) keyTerms.push('menu', 'nav', 'navigation');
-      if (intentLower.includes('contact')) keyTerms.push('contact');
-      if (intentLower.includes('home')) keyTerms.push('home');
-      
-      console.log("🔍 DOM Monitor: Key terms for search:", keyTerms);
-      
-      // Text-based search with enhanced matching
-      for (const searchTerm of keyTerms) {
-        console.log("🔍 DOM Monitor: Searching for term:", searchTerm);
-        
-        for (const [indexedWord, elementIds] of this.textIndex.entries()) {
-          let matchFound = false;
+              // Enhanced text-based search with semantic keywords
+        for (const searchTerm of extractedKeywords) {
+          console.log("🔍 DOM Monitor: Searching for semantic term:", searchTerm);
           
-          // Exact match
-          if (indexedWord === searchTerm) {
-            matchFound = true;
-          }
-          // Contains match
-          else if (indexedWord.includes(searchTerm) || searchTerm.includes(indexedWord)) {
-            matchFound = true;
-          }
-          // Partial match for longer words
-          else if (searchTerm.length > 3 && indexedWord.length > 3) {
-            const overlap = this.getStringOverlap(searchTerm, indexedWord);
-            if (overlap >= Math.min(searchTerm.length, indexedWord.length) * 0.6) {
-              matchFound = true;
-            }
-          }
-          
-          if (matchFound) {
-            console.log("🔍 DOM Monitor: Text match found:", { 
-              searchTerm: searchTerm, 
-              indexedWord: indexedWord, 
-              elementCount: elementIds.size 
-            });
+          for (const [indexedWord, elementIds] of this.textIndex.entries()) {
+            let matchScore = 0;
             
-            for (const elementId of elementIds) {
-              const element = this.cache.get(elementId)
-              if (element) {
-                // More permissive visibility check for broader search
-                if (element.visibility && element.interactable) {
-                  const score = this.calculateTextScore(searchTerm, indexedWord)
+            // Exact match (highest score)
+            if (indexedWord === searchTerm) {
+              matchScore = 1.0;
+            }
+            // Contains match
+            else if (indexedWord.includes(searchTerm) || searchTerm.includes(indexedWord)) {
+              matchScore = 0.8;
+            }
+            // Fuzzy match for longer words (improved algorithm)
+            else if (searchTerm.length > 3 && indexedWord.length > 3) {
+              const similarity = this._calculateStringSimilarity(searchTerm, indexedWord);
+              if (similarity >= 0.6) {
+                matchScore = similarity * 0.7;
+              }
+            }
+            
+            if (matchScore > 0) {
+              console.log("🔍 DOM Monitor: Enhanced text match found:", { 
+                searchTerm: searchTerm, 
+                indexedWord: indexedWord, 
+                similarity: matchScore,
+                elementCount: elementIds.size 
+              });
+              
+              for (const elementId of elementIds) {
+                const element = this.cache.get(elementId)
+                if (element && element.visibility && element.interactable) {
+                  const score = matchScore * 10; // Scale up for better ranking
                   this.addToResults(results, elementId, score, 'text')
-                  console.log("🎯 DOM Monitor: Added text match:", {
+                  console.log("🎯 DOM Monitor: Added enhanced text match:", {
                     elementId: elementId.slice(0, 30) + '...',
                     text: element.text.slice(0, 30),
-                    score: score
-                  });
-                } else {
-                  console.log("🔍 DOM Monitor: Element found but not visible/interactable:", {
-                    elementId: elementId.slice(0, 30) + '...',
-                    text: element.text.slice(0, 30),
-                    visible: element.visibility,
-                    interactable: element.interactable
+                    score: score,
+                    similarity: matchScore
                   });
                 }
               }
             }
           }
         }
-      }
       
       // Role-based search with enhanced mapping
       const roleKeywords = {
@@ -694,6 +655,66 @@
       }
       
       return finalResults;
+    }
+
+    _extractSemanticKeywords(intentLower) {
+      // Extract base words
+      const words = intentLower.split(/\s+/).filter(word => word.length > 2);
+      
+      // Add semantic variations and synonyms
+      const enhancedKeywords = [...words];
+      
+      // Common semantic mappings for better element matching
+      const semanticMaps = {
+        'about': ['about', 'about us', 'company', 'info', 'information', 'who we are'],
+        'contact': ['contact', 'contact us', 'get in touch', 'support', 'help'],
+        'login': ['login', 'log in', 'sign in', 'signin', 'authenticate', 'enter'],
+        'search': ['search', 'find', 'query', 'look for', 'explore'],
+        'menu': ['menu', 'navigation', 'nav', 'options'],
+        'home': ['home', 'main', 'start', 'welcome'],
+        'submit': ['submit', 'send', 'go', 'continue', 'proceed'],
+        'cancel': ['cancel', 'back', 'close', 'exit']
+      };
+      
+      // Add semantic variations
+      words.forEach(word => {
+        if (semanticMaps[word]) {
+          enhancedKeywords.push(...semanticMaps[word]);
+        }
+      });
+      
+      // Remove duplicates and return
+      return [...new Set(enhancedKeywords)];
+    }
+
+    _getFallbackElements() {
+      const fallbackResults = [];
+      for (const [elementId, data] of this.cache.entries()) {
+        if (data.visibility && data.interactable) {
+          fallbackResults.push({
+            elementId,
+            element: data,
+            scores: { fallback: 0.5 },
+            totalScore: 0.5,
+            confidence: 0.5
+          });
+        }
+      }
+      return fallbackResults.sort((a, b) => b.element.lastSeen - a.element.lastSeen).slice(0, 10);
+    }
+
+    _calculateStringSimilarity(str1, str2) {
+      // Enhanced string similarity calculation for better fuzzy matching
+      if (str1 === str2) return 1.0;
+      if (str1.includes(str2) || str2.includes(str1)) return 0.8;
+      
+      // Calculate character overlap ratio
+      const set1 = new Set(str1.toLowerCase());
+      const set2 = new Set(str2.toLowerCase());
+      const intersection = new Set([...set1].filter(x => set2.has(x)));
+      const union = new Set([...set1, ...set2]);
+      
+      return intersection.size / union.size;
     }
 
     calculateTextScore(searchWord, indexedWord) {
@@ -1155,7 +1176,7 @@
     setupMessageListener() {
       window.addEventListener('message', (event) => {
         try {
-          const data = event.data
+        const data = event.data
           
           // ENHANCED LOGGING: Log all incoming messages for debugging
           if (data && (data.action || data.type)) {
@@ -1185,7 +1206,7 @@
           // Handle legacy DOM_MONITOR_ format 
           else if (data && data.type && data.type.startsWith('DOM_MONITOR_')) {
             console.log("🔍 DOM Monitor: Processing legacy DOM_MONITOR_ message:", data.type)
-            this.handleMessage(data)
+          this.handleMessage(data)
           }
           // Log unhandled messages for debugging
           else if (data && (data.action || data.type)) {
