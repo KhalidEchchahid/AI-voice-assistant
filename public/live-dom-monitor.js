@@ -139,25 +139,6 @@
       }
     }
 
-    getElementClassName(element) {
-      // 🛠️ CRITICAL FIX: Handle SVG elements with SVGAnimatedString className
-      try {
-        if (element.className) {
-          // For SVG elements, className is an SVGAnimatedString object
-          if (typeof element.className === 'object' && element.className.baseVal !== undefined) {
-            return element.className.baseVal || 'none';
-          }
-          // For regular HTML elements, className is a string
-          else if (typeof element.className === 'string') {
-            return element.className || 'none';
-          }
-        }
-        return 'none';
-      } catch (e) {
-        return 'none';
-      }
-    }
-
     checkVisibility(element) {
       if (!element.offsetParent && element.style.display !== 'none') return false
       if (element.style.visibility === 'hidden') return false
@@ -205,10 +186,9 @@
         }
       }
       
-      // Class selector (fixed for SVG elements)
-      const className = this.getElementClassName(element)
-      if (className && className !== 'none') {
-        const classes = className.split(' ').filter(c => c && !c.match(/^(ng-|js-|is-|has-)/))
+      // Class selector
+      if (element.className && typeof element.className === 'string') {
+        const classes = element.className.split(' ').filter(c => c && !c.match(/^(ng-|js-|is-|has-)/))
         if (classes.length > 0 && classes.length <= 3) {
           selectors.push({ 
             type: 'class', 
@@ -416,112 +396,19 @@
       if (!element || element.nodeType !== Node.ELEMENT_NODE) return false
       
       const tag = element.tagName.toLowerCase()
-      
-      // 🚫 CRITICAL FIX: Immediately reject SVG and other non-interactive elements
-      const nonInteractiveTags = [
-        'svg', 'path', 'circle', 'rect', 'line', 'polygon', 'polyline', 'ellipse',
-        'g', 'defs', 'use', 'image', 'text', 'tspan', 'textpath', 'marker',
-        'clippath', 'mask', 'pattern', 'foreignobject', 'symbol',
-        'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-        'ul', 'ol', 'li', 'img', 'br', 'hr', 'script', 'style',
-        'meta', 'link', 'title', 'head', 'body', 'html'
-      ]
-      
-      if (nonInteractiveTags.includes(tag)) {
-        // Only log rejection for debugging when needed (much less spam)
-        if (Math.random() < 0.01) { // Log only 1% of rejections to reduce spam
-          console.log(`⏭️ isRelevantElement: Skipped ${tag} (non-interactive)`, {
-            id: element.id || 'none'
-          });
-        }
-        return false;
-      }
-      
-      // 🎯 ENHANCED: More comprehensive interactive tags
       const interactiveTags = [
         'button', 'a', 'input', 'select', 'textarea', 'form',
-        'details', 'summary', 'label', 'fieldset', 'legend'
+        'details', 'summary', 'label'
       ]
       
       // Check if it's an interactive tag
-      if (interactiveTags.includes(tag)) {
-        console.log(`✅ isRelevantElement: Accepted ${tag} (interactive tag)`, {
-          id: element.id || 'none',
-          name: element.name || 'none',
-          className: this.getElementClassName(element)
-        });
-        return true;
-      }
-      
-      // 🎯 ENHANCED: Check for form-related attributes that make elements relevant
-      if (element.hasAttribute('name')) {
-        console.log(`✅ isRelevantElement: Accepted ${tag} (has name attribute)`, {
-          name: element.getAttribute('name'),
-          id: element.id || 'none'
-        });
-        return true;
-      }
+      if (interactiveTags.includes(tag)) return true
       
       // Check for interactive attributes
-      if (element.onclick || element.getAttribute('onclick')) {
-        console.log(`✅ isRelevantElement: Accepted ${tag} (has onclick)`, {
-          id: element.id || 'none'
-        });
-        return true;
-      }
-      
-      // Check for role-based interactivity
-      const role = element.getAttribute('role');
-      const interactiveRoles = ['button', 'link', 'textbox', 'combobox', 'listbox', 'menuitem', 'tab'];
-      if (role && interactiveRoles.includes(role)) {
-        console.log(`✅ isRelevantElement: Accepted ${tag} (interactive role: ${role})`, {
-          id: element.id || 'none'
-        });
-        return true;
-      }
-      
-      // Check for tabindex (focusable elements)
-      if (element.hasAttribute('tabindex')) {
-        console.log(`✅ isRelevantElement: Accepted ${tag} (has tabindex)`, {
-          tabindex: element.getAttribute('tabindex'),
-          id: element.id || 'none'
-        });
-        return true;
-      }
-      
-      // Check for CSS classes that indicate interactivity (fixed for SVG elements)
-      const classList = element.classList;
-      const interactiveClasses = ['btn', 'button', 'clickable', 'form-control', 'input', 'field'];
-      for (const cls of interactiveClasses) {
-        if (classList && classList.contains(cls)) {
-          console.log(`✅ isRelevantElement: Accepted ${tag} (has class: ${cls})`, {
-            id: element.id || 'none',
-            className: this.getElementClassName(element)
-          });
-          return true;
-        }
-      }
-      
-      // Check for data attributes that indicate interactivity
-      const dataAttrs = ['data-action', 'data-click', 'data-toggle', 'data-target'];
-      for (const attr of dataAttrs) {
-        if (element.hasAttribute(attr)) {
-          console.log(`✅ isRelevantElement: Accepted ${tag} (has ${attr})`, {
-            id: element.id || 'none',
-            value: element.getAttribute(attr)
-          });
-          return true;
-        }
-      }
-      
-      // Log rejection for debugging (reduced spam)
-      if (Math.random() < 0.05) { // Log only 5% of rejections to reduce spam
-        console.log(`❌ isRelevantElement: Rejected ${tag}`, {
-          id: element.id || 'none',
-          className: this.getElementClassName(element),
-          reason: 'No interactive indicators found'
-        });
-      }
+      if (element.onclick || element.getAttribute('onclick')) return true
+      if (element.getAttribute('role') === 'button') return true
+      if (element.getAttribute('tabindex')) return true
+      if (element.classList.contains('btn') || element.classList.contains('button')) return true
       
       return false
     }
@@ -1029,111 +916,6 @@
         selectorIndexSize: this.selectorIndex.size
       })
     }
-
-    dumpAllCachedElements() {
-      console.log("🗃️ DOM Monitor: COMPLETE CACHE DUMP");
-      console.log("=".repeat(100));
-      
-      if (this.cache.size === 0) {
-        console.log("❌ Cache is empty - no elements cached!");
-        return;
-      }
-      
-      let inputCount = 0;
-      let buttonCount = 0;
-      let linkCount = 0;
-      let otherCount = 0;
-      
-      for (const [elementId, data] of this.cache.entries()) {
-        console.log(`🗃️ CACHED ELEMENT:`, {
-          elementId: elementId,
-          tagName: data.tagName,
-          text: data.text || 'NO_TEXT',
-          role: data.role,
-          attributes: {
-            id: data.attributes.id || 'none',
-            name: data.attributes.name || 'none',
-            type: data.attributes.type || 'none',
-            placeholder: data.attributes.placeholder || 'none',
-            'aria-label': data.attributes['aria-label'] || 'none',
-            className: data.attributes.className || 'none',
-            title: data.attributes.title || 'none',
-            value: data.attributes.value || 'none'
-          },
-          position: data.position,
-          visibility: data.visibility,
-          interactable: data.interactable,
-          selectors: data.selectors.map(s => `${s.type}: ${s.value}`),
-          updateCount: data.updateCount,
-          lastSeen: new Date(data.lastSeen).toISOString()
-        });
-        
-        // Count by type
-        if (data.tagName === 'input') inputCount++;
-        else if (data.tagName === 'button') buttonCount++;
-        else if (data.tagName === 'a') linkCount++;
-        else otherCount++;
-        
-        // Special attention to form inputs
-        if (data.tagName === 'input') {
-          console.log(`🎯 FORM INPUT DETAILS:`, {
-            name: data.attributes.name,
-            type: data.attributes.type,
-            placeholder: data.attributes.placeholder,
-            id: data.attributes.id,
-            ariaLabel: data.attributes['aria-label'],
-            searchableTerms: this.getSearchableTermsForElement(data)
-          });
-        }
-      }
-      
-      console.log("📊 CACHE SUMMARY:", {
-        total: this.cache.size,
-        inputs: inputCount,
-        buttons: buttonCount,
-        links: linkCount,
-        other: otherCount,
-        textIndexSize: this.textIndex.size,
-        roleIndexSize: this.roleIndex.size
-      });
-      
-      // Show what's in the text index
-      console.log("🔍 TEXT INDEX CONTENTS:");
-      let indexCount = 0;
-      for (const [word, elementIds] of this.textIndex.entries()) {
-        if (indexCount < 20) { // Show first 20 entries
-          console.log(`  "${word}" -> ${elementIds.size} elements`);
-          indexCount++;
-        }
-      }
-      
-      console.log("=".repeat(100));
-    }
-
-    getSearchableTermsForElement(data) {
-      const searchableTexts = [];
-      
-      if (data.text) {
-        searchableTexts.push(`text:"${data.text}"`);
-      }
-      
-      const attributes = data.attributes || {};
-      const searchableAttributes = ['name', 'placeholder', 'aria-label', 'title', 'alt', 'value'];
-      
-      for (const attrName of searchableAttributes) {
-        const attrValue = attributes[attrName];
-        if (attrValue && typeof attrValue === 'string' && attrValue.trim().length > 0) {
-          searchableTexts.push(`${attrName}:"${attrValue}"`);
-          
-          if (attrName === 'name' && /[A-Z]/.test(attrValue)) {
-            const splitWords = attrValue.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
-            searchableTexts.push(`name_split:"${splitWords}"`);
-          }
-        }
-      }
-      
-      return searchableTexts;
-    }
   }
 
   // --- DOM Observer System ---
@@ -1199,55 +981,10 @@
     observeExistingElements() {
       console.log("🔍 DOM Monitor: Starting initial element discovery...");
       
-      // 🎯 ENHANCED: More selective selectors to avoid SVG spam
       const selectors = [
-        // Form elements (critical for the missing field issue)
-        'input:not(svg input)',           // All input fields (exclude SVG)
-        'input[type]:not(svg input[type])',     // Explicitly typed inputs  
-        'select:not(svg select)',          // Dropdown selectors
-        'textarea:not(svg textarea)',        // Text areas
-        'form:not(svg form)',            // Form containers
-        
-        // Interactive elements
-        'button:not(svg button)',          // Buttons
-        'a[href]:not(svg a[href])',         // Links with href
-        'a:not(svg a)',               // All links (some may not have href)
-        
-        // Role-based elements (exclude SVG context)
-        '*:not(svg):not(svg *)[role="button"]',
-        '*:not(svg):not(svg *)[role="link"]',
-        '*:not(svg):not(svg *)[role="textbox"]',
-        '*:not(svg):not(svg *)[role="combobox"]',
-        '*:not(svg):not(svg *)[role="listbox"]',
-        '*:not(svg):not(svg *)[role="menuitem"]',
-        '*:not(svg):not(svg *)[role="tab"]',
-        
-        // Clickable indicators (exclude SVG context)
-        '*:not(svg):not(svg *)[onclick]',       // Has onclick attribute
-        '*:not(svg):not(svg *)[tabindex]',      // Focusable elements
-        '*:not(svg):not(svg *)[data-action]',   // Custom action attributes
-        '*:not(svg):not(svg *)[data-click]',
-        '*:not(svg):not(svg *)[data-toggle]',
-        
-        // CSS class indicators (exclude SVG context)
-        '*:not(svg):not(svg *).btn', 
-        '*:not(svg):not(svg *).button', 
-        '*:not(svg):not(svg *).link', 
-        '*:not(svg):not(svg *).clickable',
-        '*:not(svg):not(svg *).form-control',   // Bootstrap form classes
-        '*:not(svg):not(svg *).form-input',
-        '*:not(svg):not(svg *).input',
-        '*:not(svg):not(svg *).field',
-        '*:not(svg):not(svg *).control',
-        
-        // Additional form field patterns (exclude SVG context)
-        '*:not(svg):not(svg *)[name]',          // Elements with name attribute (crucial!)
-        '*:not(svg):not(svg *)[id*="name"]',    // IDs containing "name"
-        '*:not(svg):not(svg *)[id*="email"]',   // IDs containing "email"  
-        '*:not(svg):not(svg *)[id*="phone"]',   // IDs containing "phone"
-        '*:not(svg):not(svg *)[class*="input"]', // Classes containing "input"
-        '*:not(svg):not(svg *)[class*="field"]', // Classes containing "field"
-        '*:not(svg):not(svg *)[placeholder]'    // Elements with placeholder text
+        'button', 'a[href]', 'input', 'select', 'textarea', 'form',
+        '[onclick]', '[role="button"]', '[role="link"]', '[tabindex]',
+        '.btn', '.button', '.link', '.clickable'
       ]
       
       console.log("🔍 DOM Monitor: Using selectors:", selectors);
@@ -1257,53 +994,6 @@
       let skippedCount = 0;
       
       console.log("🔍 DOM Monitor: Found potential elements:", elements.length);
-      
-      // 🎯 ENHANCED: Log ALL found elements with their attributes for debugging
-      console.log("📋 DOM Monitor: DETAILED ELEMENT DISCOVERY LOG:");
-      console.log("=" * 80);
-      elements.forEach((element, index) => {
-        const attributes = {};
-        // Collect all attributes
-        for (let i = 0; i < element.attributes.length; i++) {
-          const attr = element.attributes[i];
-          attributes[attr.name] = attr.value;
-        }
-        
-        const elementInfo = {
-          index: index + 1,
-          tagName: element.tagName.toLowerCase(),
-          id: element.id || 'NO_ID',
-          classes: this.cache.getElementClassName(element),
-          textContent: (element.textContent || '').trim().slice(0, 50) || 'NO_TEXT',
-          value: element.value || 'NO_VALUE',
-          type: element.type || 'NO_TYPE',
-          name: element.getAttribute('name') || 'NO_NAME',
-          placeholder: element.getAttribute('placeholder') || 'NO_PLACEHOLDER',
-          ariaLabel: element.getAttribute('aria-label') || 'NO_ARIA_LABEL',
-          title: element.getAttribute('title') || 'NO_TITLE',
-          allAttributes: attributes,
-          position: this.cache.getElementPosition(element),
-          visible: this.cache.checkVisibility(element),
-          interactable: this.cache.checkInteractability(element)
-        };
-        
-        console.log(`📋 Element ${index + 1}:`, elementInfo);
-        
-        // Special attention to form inputs
-        if (element.tagName.toLowerCase() === 'input') {
-          console.log(`🎯 FORM INPUT DETECTED:`, {
-            name: element.name,
-            type: element.type,
-            placeholder: element.placeholder,
-            id: element.id,
-            classes: this.cache.getElementClassName(element),
-            value: element.value,
-            ariaLabel: element.getAttribute('aria-label'),
-            formOwner: element.form?.id || 'NO_FORM'
-          });
-        }
-      });
-      console.log("=" * 80);
       
       // DEBUG: Log some sample elements found
       if (elements.length > 0) {
@@ -1348,30 +1038,15 @@
       }
       
       // Process normal elements
-      console.log("🔄 DOM Monitor: Processing elements for caching...");
       for (const element of elements) {
         const elementId = this.cache.addElement(element)
         if (elementId) {
           addedCount++;
-          console.log(`✅ CACHED Element: ${element.tagName.toLowerCase()}`, {
-            id: element.id || 'none',
-            name: element.name || 'none', 
-            type: element.type || 'none',
-            text: (element.textContent || '').trim().slice(0, 30) || 'none',
-            elementId: elementId.slice(0, 40) + '...'
-          });
           if (this.intersectionObserver) {
             this.intersectionObserver.observe(element)
           }
         } else {
           skippedCount++;
-          console.log(`❌ SKIPPED Element: ${element.tagName.toLowerCase()}`, {
-            id: element.id || 'none',
-            name: element.name || 'none',
-            type: element.type || 'none', 
-            text: (element.textContent || '').trim().slice(0, 30) || 'none',
-            reason: 'Not relevant or failed isRelevantElement check'
-          });
         }
       }
       
@@ -1386,9 +1061,6 @@
           selector: this.cache.selectorIndex.size
         }
       });
-      
-      // 🎯 ENHANCED: Dump all cached elements for debugging
-      this.cache.dumpAllCachedElements();
 
       // DEBUG: Log some cached elements for verification
       if (this.cache.cache.size > 0) {
@@ -1443,9 +1115,6 @@
       
       console.log(`✅ DOM Monitor: Broader scan found ${foundCount} additional interactive elements`);
       console.log(`📊 DOM Monitor: Total cache size now: ${this.cache.cache.size}`);
-      
-      // Dump all cached elements for debugging
-      this.cache.dumpAllCachedElements();
     }
 
     handleMutations(mutations) {
@@ -1511,14 +1180,10 @@
         elements.push(rootElement)
       }
       
-      // Use the same selective selectors as observeExistingElements (avoid SVG)
       const selectors = [
-        'input:not(svg input)', 'input[type]:not(svg input[type])', 'select:not(svg select)', 'textarea:not(svg textarea)', 'form:not(svg form)',
-        'button:not(svg button)', 'a[href]:not(svg a[href])', 'a:not(svg a)',
-        '*:not(svg):not(svg *)[role="button"]', '*:not(svg):not(svg *)[role="link"]', '*:not(svg):not(svg *)[role="textbox"]',
-        '*:not(svg):not(svg *)[onclick]', '*:not(svg):not(svg *)[tabindex]', '*:not(svg):not(svg *)[data-action]',
-        '*:not(svg):not(svg *).btn', '*:not(svg):not(svg *).button', '*:not(svg):not(svg *).link', '*:not(svg):not(svg *).clickable', '*:not(svg):not(svg *).form-control',
-        '*:not(svg):not(svg *)[name]', '*:not(svg):not(svg *)[id*="name"]', '*:not(svg):not(svg *)[id*="email"]', '*:not(svg):not(svg *)[placeholder]'
+        'button', 'a[href]', 'input', 'select', 'textarea',
+        '[onclick]', '[role="button"]', '[tabindex]',
+        '.btn', '.button', '.link'
       ]
       
       const found = rootElement.querySelectorAll(selectors.join(','))
@@ -2266,13 +1931,6 @@
       monitor.cache.forceReindexAllElements();
       return { success: true, message: "Re-indexing completed" };
     }, "forceReindex"),
-    
-    // 🎯 ENHANCED: Dump all cached elements for debugging
-    dumpCache: () => safeExecute(() => {
-      console.log("🗃️ DOM Monitor API: dumpCache called");
-      monitor.cache.dumpAllCachedElements();
-      return { success: true, message: "Cache dump completed - check console logs" };
-    }, "dumpCache"),
     
     getAllElements: (filter = {}) => safeExecute(() => {
       console.log("📋 DOM Monitor API: getAllElements called:", { filter });

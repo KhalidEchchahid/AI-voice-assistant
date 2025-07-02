@@ -3,7 +3,7 @@
   console.log("AI Assistant Helper: Initializing action execution system")
 
   // Version and compatibility check
-  const HELPER_VERSION = "2.1.0"
+  const HELPER_VERSION = "2.2.0"
   
   // Error boundary for safer execution
   function safeExecute(fn, context = "unknown") {
@@ -103,63 +103,63 @@
         resolve()
         return
       }
-      
-      // Create animated cursor
-      const cursor = document.createElement('div')
-      cursor.className = 'ai-animated-cursor'
-      cursor.innerHTML = `
-        <div class="cursor-pointer">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M5.5 3L5.5 19L9.5 15L12.5 18.5L15 17L12 13.5L18.5 7L5.5 3Z" fill="currentColor"/>
-            <path d="M5.5 3L5.5 19L9.5 15L12.5 18.5L15 17L12 13.5L18.5 7L5.5 3Z" stroke="white" stroke-width="1"/>
-          </svg>
-        </div>
-        <div class="cursor-trail"></div>
-      `
-      
-      // Style the cursor
-      Object.assign(cursor.style, {
-        position: 'fixed',
-        left: '100px',
-        top: '100px',
-        width: '24px',
-        height: '24px',
-        zIndex: '999999',
-        pointerEvents: 'none',
+    
+    // Create animated cursor
+    const cursor = document.createElement('div')
+    cursor.className = 'ai-animated-cursor'
+    cursor.innerHTML = `
+      <div class="cursor-pointer">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5.5 3L5.5 19L9.5 15L12.5 18.5L15 17L12 13.5L18.5 7L5.5 3Z" fill="currentColor"/>
+          <path d="M5.5 3L5.5 19L9.5 15L12.5 18.5L15 17L12 13.5L18.5 7L5.5 3Z" stroke="white" stroke-width="1"/>
+        </svg>
+      </div>
+      <div class="cursor-trail"></div>
+    `
+    
+    // Style the cursor
+    Object.assign(cursor.style, {
+      position: 'fixed',
+      left: '100px',
+      top: '100px',
+      width: '24px',
+      height: '24px',
+      zIndex: '999999',
+      pointerEvents: 'none',
         transition: 'all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-        transform: 'translate(-50%, -50%)',
-        color: '#3B82F6'
-      })
-      
-      document.body.appendChild(cursor)
-      
-      // Get target position
-      const rect = element.getBoundingClientRect()
-      const targetX = rect.left + rect.width / 2
-      const targetY = rect.top + rect.height / 2
-      
-      // Add floating animation while moving
+      transform: 'translate(-50%, -50%)',
+      color: '#3B82F6'
+    })
+    
+    document.body.appendChild(cursor)
+    
+    // Get target position
+    const rect = element.getBoundingClientRect()
+    const targetX = rect.left + rect.width / 2
+    const targetY = rect.top + rect.height / 2
+    
+    // Add floating animation while moving
       cursor.style.animation = 'cursorFloat 0.6s ease-in-out'
-      
-      // Animate to target
-      setTimeout(() => {
-        cursor.style.left = targetX + 'px'
-        cursor.style.top = targetY + 'px'
-        cursor.style.transform = 'translate(-50%, -50%) scale(1.2)'
-      }, 100)
-      
+    
+    // Animate to target
+    setTimeout(() => {
+      cursor.style.left = targetX + 'px'
+      cursor.style.top = targetY + 'px'
+      cursor.style.transform = 'translate(-50%, -50%) scale(1.2)'
+    }, 100)
+    
       // Action should happen after cursor reaches target
-      setTimeout(() => {
-        performClickAnimation(cursor, targetX, targetY)
+    setTimeout(() => {
+      performClickAnimation(cursor, targetX, targetY)
         // Resolve the promise here so the actual action can be performed
         resolve()
       }, 700)
-      
+    
       // Remove cursor after click animation
-      setTimeout(() => {
-        cursor.style.opacity = '0'
-        cursor.style.transform = 'translate(-50%, -50%) scale(0.5)'
-        setTimeout(() => cursor.remove(), 500)
+    setTimeout(() => {
+      cursor.style.opacity = '0'
+      cursor.style.transform = 'translate(-50%, -50%) scale(0.5)'
+      setTimeout(() => cursor.remove(), 500)
       }, 2000)
     })
   }
@@ -247,6 +247,270 @@
     }
   }
   
+  // Smart Select Handler - handles both native selects and custom dropdowns
+  async function executeSmartSelect(element, actionCommand) {
+    try {
+      // Extract target value from intent
+      const targetValue = extractTargetValueFromIntent(actionCommand.intent, actionCommand.value)
+      console.log("🎯 AI Assistant: Smart select target:", targetValue)
+      
+      if (!targetValue) {
+        throw new Error("Could not extract target value from intent")
+      }
+      
+      // Check if it's a native HTML select element
+      if (element.tagName.toLowerCase() === 'select') {
+        console.log("📋 AI Assistant: Handling native select element")
+        return await handleNativeSelect(element, targetValue, actionCommand)
+      } else {
+        console.log("🎨 AI Assistant: Handling custom dropdown/combobox")
+        return await handleCustomDropdown(element, targetValue, actionCommand)
+      }
+      
+    } catch (error) {
+      console.error("❌ AI Assistant: Smart select error:", error)
+      return { 
+        success: false, 
+        error: error.message,
+        action_id: actionCommand.command_id || actionCommand.id,
+        element_found: true
+      }
+    }
+  }
+  
+  // Extract target value from user intent
+  function extractTargetValueFromIntent(intent, providedValue) {
+    // If value is explicitly provided, use it
+    if (providedValue) {
+      return providedValue
+    }
+    
+    // Parse from intent string
+    const intent_lower = intent.toLowerCase()
+    
+    // Common patterns: "select X from", "choose X", "pick X"
+    let match = intent.match(/select\s+([^from]+?)(?:\s+from|$)/i)
+    if (match) return match[1].trim()
+    
+    match = intent.match(/choose\s+([^from]+?)(?:\s+from|$)/i)
+    if (match) return match[1].trim()
+    
+    match = intent.match(/pick\s+([^from]+?)(?:\s+from|$)/i)
+    if (match) return match[1].trim()
+    
+    // Try to extract quoted values
+    match = intent.match(/["']([^"']+)["']/i)
+    if (match) return match[1].trim()
+    
+    // Try to extract capitalized words (often option names)
+    match = intent.match(/([A-Z][A-Za-z\s-]+[A-Za-z])/i)
+    if (match) return match[1].trim()
+    
+    console.warn("⚠️ AI Assistant: Could not extract target value from intent:", intent)
+    return null
+  }
+  
+  // Handle native HTML select elements
+  async function handleNativeSelect(selectElement, targetValue, actionCommand) {
+    console.log("📋 AI Assistant: Processing native select options")
+    
+    const options = Array.from(selectElement.options)
+    console.log("📋 AI Assistant: Available options:", options.map(opt => `"${opt.text}" (value: "${opt.value}")`))
+    
+    // Find matching option by text or value
+    let matchingOption = null
+    
+    // 1. Exact text match
+    matchingOption = options.find(opt => opt.text.trim().toLowerCase() === targetValue.toLowerCase())
+    
+    // 2. Exact value match
+    if (!matchingOption) {
+      matchingOption = options.find(opt => opt.value.toLowerCase() === targetValue.toLowerCase())
+    }
+    
+    // 3. Partial text match
+    if (!matchingOption) {
+      matchingOption = options.find(opt => opt.text.toLowerCase().includes(targetValue.toLowerCase()))
+    }
+    
+    // 4. Partial value match
+    if (!matchingOption) {
+      matchingOption = options.find(opt => opt.value.toLowerCase().includes(targetValue.toLowerCase()))
+    }
+    
+    if (!matchingOption) {
+      throw new Error(`Option "${targetValue}" not found in select. Available options: ${options.map(opt => opt.text).join(', ')}`)
+    }
+    
+    // Select the option
+    selectElement.selectedIndex = matchingOption.index
+    selectElement.value = matchingOption.value
+    
+    // Trigger events
+    selectElement.dispatchEvent(new Event('change', { bubbles: true }))
+    selectElement.dispatchEvent(new Event('input', { bubbles: true }))
+    
+    console.log(`✅ AI Assistant: Selected option "${matchingOption.text}" (value: "${matchingOption.value}")`)
+    
+    return { 
+      success: true, 
+      message: `Selected "${matchingOption.text}" from dropdown`,
+      action_id: actionCommand.command_id || actionCommand.id,
+      element_found: true,
+      selected_option: matchingOption.text,
+      selected_value: matchingOption.value
+    }
+  }
+  
+  // Handle custom dropdown/combobox elements (React-Select, etc.)
+  async function handleCustomDropdown(element, targetValue, actionCommand) {
+    console.log("🎨 AI Assistant: Processing custom dropdown")
+    
+    try {
+      // Step 1: Click to open dropdown
+      console.log("🎨 Step 1: Opening dropdown")
+      element.click()
+      
+      // Wait for dropdown to open
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+      // Step 2: Look for search input that appeared
+      const searchInput = findDropdownSearchInput(element)
+      if (searchInput) {
+        console.log("🎨 Step 2: Found search input, typing target value")
+        searchInput.focus()
+        searchInput.value = targetValue
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+        searchInput.dispatchEvent(new Event('keyup', { bubbles: true }))
+        
+        // Wait for search results
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+      
+      // Step 3: Find and click the matching option
+      console.log("🎨 Step 3: Looking for matching option to click")
+      const option = findDropdownOption(element, targetValue)
+      
+      if (!option) {
+        throw new Error(`Option "${targetValue}" not found in custom dropdown`)
+      }
+      
+      console.log("🎨 Step 3: Clicking matching option")
+      option.click()
+      
+      // Wait for selection to complete
+      await new Promise(resolve => setTimeout(resolve, 200))
+      
+      console.log(`✅ AI Assistant: Selected "${targetValue}" from custom dropdown`)
+      
+      return { 
+        success: true, 
+        message: `Selected "${targetValue}" from custom dropdown`,
+        action_id: actionCommand.command_id || actionCommand.id,
+        element_found: true,
+        selected_option: targetValue
+      }
+      
+    } catch (error) {
+      // If custom dropdown logic fails, try simple click as fallback
+      console.log("🎨 Custom dropdown logic failed, trying simple click fallback")
+      element.click()
+      
+      return { 
+        success: true, 
+        message: `Clicked dropdown (custom logic failed, used fallback)`,
+        action_id: actionCommand.command_id || actionCommand.id,
+        element_found: true,
+        warning: error.message
+      }
+    }
+  }
+  
+  // Find search input in opened dropdown
+  function findDropdownSearchInput(dropdownElement) {
+    // Common selectors for search inputs in dropdowns
+    const selectors = [
+      'input[type="text"]',
+      'input[role="combobox"]',
+      'input[aria-expanded]',
+      '.react-select__input input',
+      '.select__input input',
+      '[class*="search"] input',
+      '[class*="filter"] input'
+    ]
+    
+    // Look within the dropdown element and its vicinity
+    for (const selector of selectors) {
+      // First try within the dropdown element
+      let input = dropdownElement.querySelector(selector)
+      if (input && input.offsetParent !== null) { // Must be visible
+        return input
+      }
+      
+      // Then try within the document (for portaled dropdowns)
+      const inputs = document.querySelectorAll(selector)
+      for (const input of inputs) {
+        if (input.offsetParent !== null && isInputRecentlyVisible(input)) {
+          return input
+        }
+      }
+    }
+    
+    console.log("🎨 No search input found in dropdown")
+    return null
+  }
+  
+  // Check if input became visible recently (for portaled dropdowns)
+  function isInputRecentlyVisible(input) {
+    const rect = input.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0
+  }
+  
+  // Find option element in opened dropdown
+  function findDropdownOption(dropdownElement, targetValue) {
+    // Common selectors for dropdown options
+    const selectors = [
+      '[role="option"]',
+      '.react-select__option',
+      '.select__option',
+      '[class*="option"]',
+      '[class*="item"]',
+      'li',
+      'div[data-value]'
+    ]
+    
+    const targetLower = targetValue.toLowerCase()
+    
+    // Look within the dropdown and document (for portaled dropdowns)
+    const contexts = [dropdownElement, document]
+    
+    for (const context of contexts) {
+      for (const selector of selectors) {
+        const options = context.querySelectorAll(selector)
+        
+        for (const option of options) {
+          if (!option.offsetParent) continue // Skip hidden elements
+          
+          const optionText = (option.textContent || '').trim().toLowerCase()
+          const optionValue = option.getAttribute('data-value') || ''
+          
+          // Check for exact or partial matches
+          if (optionText === targetLower || 
+              optionValue.toLowerCase() === targetLower ||
+              optionText.includes(targetLower) ||
+              optionValue.toLowerCase().includes(targetLower)) {
+            
+            console.log(`🎨 Found matching option: "${option.textContent}" (selector: ${selector})`)
+            return option
+          }
+        }
+      }
+    }
+    
+    console.log(`🎨 No matching option found for "${targetValue}"`)
+    return null
+  }
+
   // Execute individual action
   // NEW BEHAVIOR: Actions now follow realistic user interaction flow:
   // 1. Cursor animates to target element (if applicable)
@@ -444,6 +708,10 @@
             element_found: true,
             text: text
           }
+          
+        case "select":
+          console.log("📋 AI Assistant: Executing smart select action")
+          return await executeSmartSelect(element, actionCommand)
           
         default:
           throw new Error(`Unknown action type: ${actionType}`)
@@ -676,7 +944,7 @@
     isReady: () => true,
     getSupportedActions: () => [
       "click", "type", "clear", "scroll", "hover", "focus", "submit", 
-      "check", "uncheck", "navigate", "wait", "getValue", "getText"
+      "check", "uncheck", "navigate", "wait", "getValue", "getText", "select"
     ]
   }
 
