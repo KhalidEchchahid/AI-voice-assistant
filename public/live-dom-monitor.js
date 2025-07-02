@@ -139,6 +139,25 @@
       }
     }
 
+    getElementClassName(element) {
+      // 🛠️ CRITICAL FIX: Handle SVG elements with SVGAnimatedString className
+      try {
+        if (element.className) {
+          // For SVG elements, className is an SVGAnimatedString object
+          if (typeof element.className === 'object' && element.className.baseVal !== undefined) {
+            return element.className.baseVal || 'none';
+          }
+          // For regular HTML elements, className is a string
+          else if (typeof element.className === 'string') {
+            return element.className || 'none';
+          }
+        }
+        return 'none';
+      } catch (e) {
+        return 'none';
+      }
+    }
+
     checkVisibility(element) {
       if (!element.offsetParent && element.style.display !== 'none') return false
       if (element.style.visibility === 'hidden') return false
@@ -186,9 +205,10 @@
         }
       }
       
-      // Class selector
-      if (element.className && typeof element.className === 'string') {
-        const classes = element.className.split(' ').filter(c => c && !c.match(/^(ng-|js-|is-|has-)/))
+      // Class selector (fixed for SVG elements)
+      const className = this.getElementClassName(element)
+      if (className && className !== 'none') {
+        const classes = className.split(' ').filter(c => c && !c.match(/^(ng-|js-|is-|has-)/))
         if (classes.length > 0 && classes.length <= 3) {
           selectors.push({ 
             type: 'class', 
@@ -397,6 +417,26 @@
       
       const tag = element.tagName.toLowerCase()
       
+      // 🚫 CRITICAL FIX: Immediately reject SVG and other non-interactive elements
+      const nonInteractiveTags = [
+        'svg', 'path', 'circle', 'rect', 'line', 'polygon', 'polyline', 'ellipse',
+        'g', 'defs', 'use', 'image', 'text', 'tspan', 'textpath', 'marker',
+        'clippath', 'mask', 'pattern', 'foreignobject', 'symbol',
+        'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li', 'img', 'br', 'hr', 'script', 'style',
+        'meta', 'link', 'title', 'head', 'body', 'html'
+      ]
+      
+      if (nonInteractiveTags.includes(tag)) {
+        // Only log rejection for debugging when needed (much less spam)
+        if (Math.random() < 0.01) { // Log only 1% of rejections to reduce spam
+          console.log(`⏭️ isRelevantElement: Skipped ${tag} (non-interactive)`, {
+            id: element.id || 'none'
+          });
+        }
+        return false;
+      }
+      
       // 🎯 ENHANCED: More comprehensive interactive tags
       const interactiveTags = [
         'button', 'a', 'input', 'select', 'textarea', 'form',
@@ -408,7 +448,7 @@
         console.log(`✅ isRelevantElement: Accepted ${tag} (interactive tag)`, {
           id: element.id || 'none',
           name: element.name || 'none',
-          className: element.className || 'none'
+          className: this.getElementClassName(element)
         });
         return true;
       }
@@ -449,14 +489,14 @@
         return true;
       }
       
-      // Check for CSS classes that indicate interactivity
+      // Check for CSS classes that indicate interactivity (fixed for SVG elements)
       const classList = element.classList;
       const interactiveClasses = ['btn', 'button', 'clickable', 'form-control', 'input', 'field'];
       for (const cls of interactiveClasses) {
-        if (classList.contains(cls)) {
+        if (classList && classList.contains(cls)) {
           console.log(`✅ isRelevantElement: Accepted ${tag} (has class: ${cls})`, {
             id: element.id || 'none',
-            className: element.className
+            className: this.getElementClassName(element)
           });
           return true;
         }
@@ -474,12 +514,14 @@
         }
       }
       
-      // Log rejection for debugging
-      console.log(`❌ isRelevantElement: Rejected ${tag}`, {
-        id: element.id || 'none',
-        className: element.className || 'none',
-        reason: 'No interactive indicators found'
-      });
+      // Log rejection for debugging (reduced spam)
+      if (Math.random() < 0.05) { // Log only 5% of rejections to reduce spam
+        console.log(`❌ isRelevantElement: Rejected ${tag}`, {
+          id: element.id || 'none',
+          className: this.getElementClassName(element),
+          reason: 'No interactive indicators found'
+        });
+      }
       
       return false
     }
@@ -1157,52 +1199,55 @@
     observeExistingElements() {
       console.log("🔍 DOM Monitor: Starting initial element discovery...");
       
-      // 🎯 ENHANCED: More comprehensive selectors to catch all form fields
+      // 🎯 ENHANCED: More selective selectors to avoid SVG spam
       const selectors = [
         // Form elements (critical for the missing field issue)
-        'input',           // All input fields
-        'input[type]',     // Explicitly typed inputs  
-        'select',          // Dropdown selectors
-        'textarea',        // Text areas
-        'form',            // Form containers
+        'input:not(svg input)',           // All input fields (exclude SVG)
+        'input[type]:not(svg input[type])',     // Explicitly typed inputs  
+        'select:not(svg select)',          // Dropdown selectors
+        'textarea:not(svg textarea)',        // Text areas
+        'form:not(svg form)',            // Form containers
         
         // Interactive elements
-        'button',          // Buttons
-        'a[href]',         // Links with href
-        'a',               // All links (some may not have href)
+        'button:not(svg button)',          // Buttons
+        'a[href]:not(svg a[href])',         // Links with href
+        'a:not(svg a)',               // All links (some may not have href)
         
-        // Role-based elements
-        '[role="button"]',
-        '[role="link"]',
-        '[role="textbox"]',
-        '[role="combobox"]',
-        '[role="listbox"]',
-        '[role="menuitem"]',
-        '[role="tab"]',
+        // Role-based elements (exclude SVG context)
+        '*:not(svg):not(svg *)[role="button"]',
+        '*:not(svg):not(svg *)[role="link"]',
+        '*:not(svg):not(svg *)[role="textbox"]',
+        '*:not(svg):not(svg *)[role="combobox"]',
+        '*:not(svg):not(svg *)[role="listbox"]',
+        '*:not(svg):not(svg *)[role="menuitem"]',
+        '*:not(svg):not(svg *)[role="tab"]',
         
-        // Clickable indicators
-        '[onclick]',       // Has onclick attribute
-        '[tabindex]',      // Focusable elements
-        '[data-action]',   // Custom action attributes
-        '[data-click]',
-        '[data-toggle]',
+        // Clickable indicators (exclude SVG context)
+        '*:not(svg):not(svg *)[onclick]',       // Has onclick attribute
+        '*:not(svg):not(svg *)[tabindex]',      // Focusable elements
+        '*:not(svg):not(svg *)[data-action]',   // Custom action attributes
+        '*:not(svg):not(svg *)[data-click]',
+        '*:not(svg):not(svg *)[data-toggle]',
         
-        // CSS class indicators
-        '.btn', '.button', '.link', '.clickable',
-        '.form-control',   // Bootstrap form classes
-        '.form-input',
-        '.input',
-        '.field',
-        '.control',
+        // CSS class indicators (exclude SVG context)
+        '*:not(svg):not(svg *).btn', 
+        '*:not(svg):not(svg *).button', 
+        '*:not(svg):not(svg *).link', 
+        '*:not(svg):not(svg *).clickable',
+        '*:not(svg):not(svg *).form-control',   // Bootstrap form classes
+        '*:not(svg):not(svg *).form-input',
+        '*:not(svg):not(svg *).input',
+        '*:not(svg):not(svg *).field',
+        '*:not(svg):not(svg *).control',
         
-        // Additional form field patterns
-        '[name]',          // Elements with name attribute (crucial!)
-        '[id*="name"]',    // IDs containing "name"
-        '[id*="email"]',   // IDs containing "email"  
-        '[id*="phone"]',   // IDs containing "phone"
-        '[class*="input"]', // Classes containing "input"
-        '[class*="field"]', // Classes containing "field"
-        '[placeholder]'    // Elements with placeholder text
+        // Additional form field patterns (exclude SVG context)
+        '*:not(svg):not(svg *)[name]',          // Elements with name attribute (crucial!)
+        '*:not(svg):not(svg *)[id*="name"]',    // IDs containing "name"
+        '*:not(svg):not(svg *)[id*="email"]',   // IDs containing "email"  
+        '*:not(svg):not(svg *)[id*="phone"]',   // IDs containing "phone"
+        '*:not(svg):not(svg *)[class*="input"]', // Classes containing "input"
+        '*:not(svg):not(svg *)[class*="field"]', // Classes containing "field"
+        '*:not(svg):not(svg *)[placeholder]'    // Elements with placeholder text
       ]
       
       console.log("🔍 DOM Monitor: Using selectors:", selectors);
@@ -1228,7 +1273,7 @@
           index: index + 1,
           tagName: element.tagName.toLowerCase(),
           id: element.id || 'NO_ID',
-          classes: element.className || 'NO_CLASSES',
+          classes: this.cache.getElementClassName(element),
           textContent: (element.textContent || '').trim().slice(0, 50) || 'NO_TEXT',
           value: element.value || 'NO_VALUE',
           type: element.type || 'NO_TYPE',
@@ -1251,7 +1296,7 @@
             type: element.type,
             placeholder: element.placeholder,
             id: element.id,
-            classes: element.className,
+            classes: this.cache.getElementClassName(element),
             value: element.value,
             ariaLabel: element.getAttribute('aria-label'),
             formOwner: element.form?.id || 'NO_FORM'
@@ -1466,14 +1511,14 @@
         elements.push(rootElement)
       }
       
-      // Use the same comprehensive selectors as observeExistingElements
+      // Use the same selective selectors as observeExistingElements (avoid SVG)
       const selectors = [
-        'input', 'input[type]', 'select', 'textarea', 'form',
-        'button', 'a[href]', 'a',
-        '[role="button"]', '[role="link"]', '[role="textbox"]',
-        '[onclick]', '[tabindex]', '[data-action]',
-        '.btn', '.button', '.link', '.clickable', '.form-control',
-        '[name]', '[id*="name"]', '[id*="email"]', '[placeholder]'
+        'input:not(svg input)', 'input[type]:not(svg input[type])', 'select:not(svg select)', 'textarea:not(svg textarea)', 'form:not(svg form)',
+        'button:not(svg button)', 'a[href]:not(svg a[href])', 'a:not(svg a)',
+        '*:not(svg):not(svg *)[role="button"]', '*:not(svg):not(svg *)[role="link"]', '*:not(svg):not(svg *)[role="textbox"]',
+        '*:not(svg):not(svg *)[onclick]', '*:not(svg):not(svg *)[tabindex]', '*:not(svg):not(svg *)[data-action]',
+        '*:not(svg):not(svg *).btn', '*:not(svg):not(svg *).button', '*:not(svg):not(svg *).link', '*:not(svg):not(svg *).clickable', '*:not(svg):not(svg *).form-control',
+        '*:not(svg):not(svg *)[name]', '*:not(svg):not(svg *)[id*="name"]', '*:not(svg):not(svg *)[id*="email"]', '*:not(svg):not(svg *)[placeholder]'
       ]
       
       const found = rootElement.querySelectorAll(selectors.join(','))
