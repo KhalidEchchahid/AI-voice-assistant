@@ -250,7 +250,7 @@
   // Smart Select Handler - handles both native selects and custom dropdowns
   async function executeSmartSelect(element, actionCommand) {
     try {
-      // Extract target value from intent
+      // Get target value (backend always provides this in actionCommand.value)
       const targetValue = extractTargetValueFromIntent(actionCommand.intent, actionCommand.value)
       console.log("🎯 AI Assistant: Smart select target:", targetValue)
       
@@ -278,35 +278,16 @@
     }
   }
   
-  // Extract target value from user intent
+  // Extract target value - backend always sends this directly now
   function extractTargetValueFromIntent(intent, providedValue) {
-    // If value is explicitly provided, use it
+    // Backend always provides the value directly
     if (providedValue) {
       return providedValue
     }
     
-    // Parse from intent string
-    const intent_lower = intent.toLowerCase()
-    
-    // Common patterns: "select X from", "choose X", "pick X"
-    let match = intent.match(/select\s+([^from]+?)(?:\s+from|$)/i)
-    if (match) return match[1].trim()
-    
-    match = intent.match(/choose\s+([^from]+?)(?:\s+from|$)/i)
-    if (match) return match[1].trim()
-    
-    match = intent.match(/pick\s+([^from]+?)(?:\s+from|$)/i)
-    if (match) return match[1].trim()
-    
-    // Try to extract quoted values
-    match = intent.match(/["']([^"']+)["']/i)
-    if (match) return match[1].trim()
-    
-    // Try to extract capitalized words (often option names)
-    match = intent.match(/([A-Z][A-Za-z\s-]+[A-Za-z])/i)
-    if (match) return match[1].trim()
-    
-    console.warn("⚠️ AI Assistant: Could not extract target value from intent:", intent)
+    // This should never happen - backend always extracts and sends the value
+    console.error("❌ AI Assistant: Backend didn't provide target value - this indicates a backend issue!")
+    console.error("❌ AI Assistant: Intent was:", intent)
     return null
   }
   
