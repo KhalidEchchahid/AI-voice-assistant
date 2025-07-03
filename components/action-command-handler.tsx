@@ -103,7 +103,7 @@ export default function ActionCommandHandler() {
   const [messageHistory, setMessageHistory] = useState<any[]>([])
   const [messageCount, setMessageCount] = useState(0)
   const [errors, setErrors] = useState<string[]>([])
-  const [isDebugVisible, setIsDebugVisible] = useState(true)
+  const [isDebugVisible, setIsDebugVisible] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useState<number | null>(null)
 
