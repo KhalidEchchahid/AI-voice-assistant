@@ -372,9 +372,9 @@ export default function ActionCommandHandler() {
         })
 
         setMessageCount((prev) => prev + 1)
-        // Make debug panel visible when data is received
-        setIsDebugVisible(true)
-        setIsMinimized(false)
+        // DEMO MODE: Debug panel auto-show disabled for demo
+        // setIsDebugVisible(true)
+        // setIsMinimized(false)
 
         // Decode following LiveKit documentation
         const textDecoder = new TextDecoder()
