@@ -228,7 +228,7 @@ export default function VoiceAssistant() {
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [hasEverConnected, setHasEverConnected] = useState<boolean>(false)
   const [persistedMessages, setPersistedMessages] = useState<Message[]>([])
-  const [isCameraEnabled, setIsCameraEnabled] = useState<boolean>(false)
+  const [isCameraEnabled, setIsCameraEnabled] = useState<boolean>(true)
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected)
   const [retryCount, setRetryCount] = useState<number>(0)
   const [lastConnectionAttempt, setLastConnectionAttempt] = useState<number>(0)
@@ -258,7 +258,7 @@ export default function VoiceAssistant() {
         setIsLoading(true)
         setError(null)
 
-        console.log("🔄 Generating LiveKit token...", {
+        console.log("🔄 Generating LiveKit token with VISION support...", {
           isRetry,
           retryCount,
           timestamp: Date.now(),
@@ -285,7 +285,7 @@ export default function VoiceAssistant() {
         const responseData = await response.json()
         const { token: newToken, wsUrl: newWsUrl } = responseData
 
-        console.log("✅ Token generated successfully", {
+        console.log("✅ Token generated successfully with VISION capabilities", {
           hasToken: !!newToken,
           hasWsUrl: !!newWsUrl,
           wsUrl: newWsUrl,
@@ -505,6 +505,19 @@ export default function VoiceAssistant() {
                 {/* Ripple effect */}
                 <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping opacity-0 group-hover:opacity-100" />
               </button>
+
+              {/* Vision Capabilities Info */}
+              <div className="text-center space-y-2 max-w-sm">
+                <div className="flex items-center justify-center space-x-2 text-sm text-muted-foreground">
+                  <span className="flex items-center space-x-1">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                    <span>Voice + Vision AI</span>
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground/80">
+                  I can see through your camera and help with real-world tasks
+                </p>
+              </div>
 
               {error && (
                 <div className="text-xs text-red-400 text-center max-w-xs p-4 bg-red-500/10 border border-red-500/20 rounded-lg backdrop-blur-sm">
