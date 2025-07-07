@@ -9,7 +9,7 @@
         version: '2.0.0',
         autoStart: config.autoStart !== false,
         performanceMode: config.performanceMode || 'balanced', // 'performance', 'balanced', 'memory'
-        debugMode: config.debugMode || false,
+        debugMode: config.debugMode !== false, // Enable debug mode by default
         ...config
       }
       
@@ -233,6 +233,10 @@
       }
       
       try {
+        // CRITICAL FIX: Perform initial element scan to populate cache
+        console.log("🔍 DOM Monitor: Performing initial element scan...")
+        await this.performInitialElementScan()
+        
         // Start DOM observation
         if (this.domObserver) {
           this.domObserver.startObserving()
@@ -259,6 +263,65 @@
       } catch (error) {
         console.error("❌ DOM Monitor: Failed to start monitoring:", error)
         throw error
+      }
+    }
+
+    // NEW: Perform initial element scan to populate cache
+    async performInitialElementScan() {
+      if (!this.elementCache) {
+        console.warn("DOM Monitor: Element cache not available for initial scan")
+        return
+      }
+
+      const scanOperation = async () => {
+        const relevantElements = document.querySelectorAll(
+          'button, a, input, select, textarea, form, [role="button"], [tabindex], [onclick], [data-testid], [aria-label], .btn, .button, .clickable'
+        )
+        
+        console.log(`🔍 DOM Monitor: Found ${relevantElements.length} potential elements to scan`)
+        
+        let addedCount = 0
+        let skippedCount = 0
+        
+        for (const element of relevantElements) {
+          try {
+            const elementId = await this.elementCache.addElement(element)
+            if (elementId) {
+              addedCount++
+            } else {
+              skippedCount++
+            }
+          } catch (error) {
+            console.warn("DOM Monitor: Error adding element during initial scan:", error)
+            skippedCount++
+          }
+        }
+        
+        console.log(`✅ DOM Monitor: Initial scan complete - Added: ${addedCount}, Skipped: ${skippedCount}`)
+        
+        return {
+          totalScanned: relevantElements.length,
+          added: addedCount,
+          skipped: skippedCount
+        }
+      }
+
+      if (this.performanceManager) {
+        const result = await this.performanceManager.executeWithBudget(
+          scanOperation,
+          200, // Allow up to 200ms for initial scan
+          'initialElementScan'
+        )
+        
+        if (result.success) {
+          console.log("✅ DOM Monitor: Initial element scan completed successfully")
+          return result.result
+        } else if (result.throttled) {
+          console.warn("⚠️ DOM Monitor: Initial scan was throttled, will continue in background")
+          // Continue anyway, background processing will catch up
+        }
+      } else {
+        return await scanOperation()
       }
     }
 

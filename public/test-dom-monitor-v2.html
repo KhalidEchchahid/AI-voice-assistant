@@ -125,6 +125,16 @@
         <div class="progress-bar">
             <div id="progress-fill" class="progress-fill"></div>
         </div>
+        <div id="console-logs" style="max-height: 200px; overflow-y: auto; background: #f8f9fa; padding: 10px; margin-top: 10px; font-family: monospace; font-size: 11px; border: 1px solid #ddd; border-radius: 5px;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>📦 Real-Time Cache Monitoring</h2>
+        <button onclick="enableDebugMode()">Enable Debug Mode</button>
+        <button onclick="startCacheMonitoring()">Start Cache Monitoring</button>
+        <button onclick="stopCacheMonitoring()">Stop Cache Monitoring</button>
+        <button onclick="manualElementScan()">Manual Element Scan</button>
+        <div id="cache-monitor" class="results"></div>
     </div>
 
     <div class="test-section">
@@ -179,6 +189,141 @@
     <script>
         let testResults = [];
         let progressValue = 0;
+        let cacheMonitorInterval = null;
+        let consoleLogBuffer = [];
+
+        // Intercept console logs to display them
+        const originalConsoleLog = console.log;
+        const originalConsoleDebug = console.debug;
+        const originalConsoleWarn = console.warn;
+
+        function interceptConsole() {
+            console.log = function(...args) {
+                originalConsoleLog.apply(console, args);
+                logToDisplay('LOG', args.join(' '));
+            };
+            
+            console.debug = function(...args) {
+                originalConsoleDebug.apply(console, args);
+                logToDisplay('DEBUG', args.join(' '));
+            };
+            
+            console.warn = function(...args) {
+                originalConsoleWarn.apply(console, args);
+                logToDisplay('WARN', args.join(' '));
+            };
+        }
+
+        function logToDisplay(level, message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${level}: ${message}`;
+            consoleLogBuffer.push(logEntry);
+            
+            // Keep only last 50 entries
+            if (consoleLogBuffer.length > 50) {
+                consoleLogBuffer = consoleLogBuffer.slice(-50);
+            }
+            
+            const consoleDiv = document.getElementById('console-logs');
+            if (consoleDiv) {
+                consoleDiv.textContent = consoleLogBuffer.join('\n');
+                consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            }
+        }
+
+        function enableDebugMode() {
+            if (window.DOMMonitor) {
+                window.DOMMonitor.updateConfig({ debugMode: true });
+                logResult('api-results', '🔧 Debug mode enabled for DOM Monitor');
+                
+                // Also enable on element cache directly
+                if (window.DOMMonitor.elementCache) {
+                    window.DOMMonitor.elementCache.config.debugMode = true;
+                    logResult('api-results', '🔧 Debug mode enabled for Element Cache');
+                }
+            } else {
+                logResult('api-results', '❌ DOM Monitor not available to enable debug mode');
+            }
+        }
+
+        function startCacheMonitoring() {
+            if (cacheMonitorInterval) {
+                clearInterval(cacheMonitorInterval);
+            }
+            
+            clearResults('cache-monitor');
+            logResult('cache-monitor', '📊 Starting real-time cache monitoring...\n');
+            
+            cacheMonitorInterval = setInterval(() => {
+                if (window.DOMMonitor && window.DOMMonitor.elementCache) {
+                    const stats = window.DOMMonitor.elementCache.getStats();
+                    const cacheSize = window.DOMMonitor.elementCache.cache.size;
+                    
+                    // Get sample of cached elements
+                    const cachedElements = [];
+                    let count = 0;
+                    for (const [id, data] of window.DOMMonitor.elementCache.cache.entries()) {
+                        if (count < 5) {
+                            cachedElements.push({
+                                id: id.substring(0, 30) + '...',
+                                tag: data.basicData.tagName,
+                                text: (data.basicData.text || '').substring(0, 30) + '...'
+                            });
+                            count++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    clearResults('cache-monitor');
+                    logResult('cache-monitor', `📊 Real-Time Cache Status (${new Date().toLocaleTimeString()})`);
+                    logResult('cache-monitor', `Cache Size: ${cacheSize} elements`);
+                    logResult('cache-monitor', `Total Elements: ${stats.totalElements}`);
+                    logResult('cache-monitor', `Visible Elements: ${stats.visibleElements}`);
+                    logResult('cache-monitor', `Interactable Elements: ${stats.interactableElements}`);
+                    logResult('cache-monitor', `Cache Hits: ${stats.cacheHits}`);
+                    logResult('cache-monitor', `Cache Misses: ${stats.cacheMisses}`);
+                    logResult('cache-monitor', `Memory Usage: ${stats.memoryUsage} KB`);
+                    logResult('cache-monitor', `\nSample Cached Elements:`);
+                    cachedElements.forEach((el, i) => {
+                        logResult('cache-monitor', `  ${i+1}. ${el.tag} - "${el.text}" (${el.id})`);
+                    });
+                    
+                    if (cachedElements.length === 0) {
+                        logResult('cache-monitor', '  ⚠️ No elements in cache yet!');
+                    }
+                } else {
+                    logResult('cache-monitor', '❌ DOM Monitor or Element Cache not available');
+                }
+            }, 2000); // Update every 2 seconds
+            
+            logResult('cache-monitor', '✅ Cache monitoring started (updates every 2 seconds)');
+        }
+
+        function stopCacheMonitoring() {
+            if (cacheMonitorInterval) {
+                clearInterval(cacheMonitorInterval);
+                cacheMonitorInterval = null;
+                logResult('cache-monitor', '⏹️ Cache monitoring stopped');
+            }
+        }
+
+        async function manualElementScan() {
+            if (window.DOMMonitor && window.DOMMonitor.performInitialElementScan) {
+                logResult('cache-monitor', '🔍 Manually triggering element scan...');
+                try {
+                    const result = await window.DOMMonitor.performInitialElementScan();
+                    logResult('cache-monitor', `✅ Manual scan complete: ${JSON.stringify(result)}`);
+                } catch (error) {
+                    logResult('cache-monitor', `❌ Manual scan failed: ${error.message}`);
+                }
+            } else {
+                logResult('cache-monitor', '❌ DOM Monitor not available or scan method not found');
+            }
+        }
+
+        // Start console interception
+        interceptConsole();
 
         function updateProgress(value) {
             progressValue = Math.min(100, value);
@@ -210,8 +355,12 @@
                 updateStatus('✅ DOM Monitor V2 loaded successfully!', 'success');
                 logResult('api-results', 'DOM Monitor V2 detected and ready for testing');
                 
-                // Run initial compatibility check
-                setTimeout(testInitialCompatibility, 1000);
+                // Auto-enable debug mode and start monitoring
+                setTimeout(() => {
+                    enableDebugMode();
+                    startCacheMonitoring();
+                    testInitialCompatibility();
+                }, 1000);
             } else {
                 updateProgress(Math.min(progressValue + 5, 90));
             }
@@ -327,6 +476,17 @@
             logResult('element-results', '🎯 Testing Element Detection...\n');
 
             try {
+                // First check current cache size
+                const currentStats = window.AIAssistantDOMMonitor.getStats();
+                logResult('element-results', `Current cache contains ${currentStats.cache?.totalElements || 0} elements\n`);
+
+                // Force a rescan to ensure fresh data
+                logResult('element-results', '🔄 Forcing rescan to ensure fresh cache...');
+                await window.AIAssistantDOMMonitor.refresh();
+                
+                // Wait a moment for the scan to complete
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
                 const allElements = window.AIAssistantDOMMonitor.getAllElements({ 
                     visible: true, 
                     interactable: true 
@@ -339,6 +499,18 @@
 
                 if (allElements.length > 10) {
                     logResult('element-results', `... and ${allElements.length - 10} more elements`);
+                }
+
+                // Test specific elements on this page
+                logResult('element-results', '\n🎯 Testing detection of elements on this test page:');
+                const testButtons = document.querySelectorAll('button');
+                logResult('element-results', `This page has ${testButtons.length} buttons total`);
+                
+                const foundButtons = await window.AIAssistantDOMMonitor.findElements('button');
+                logResult('element-results', `DOM Monitor found ${foundButtons.length} button elements`);
+
+                if (foundButtons.length === 0) {
+                    logResult('element-results', '⚠️ WARNING: No buttons found by DOM Monitor! This indicates a caching issue.');
                 }
 
                 logResult('element-results', '\n✅ Element detection completed!');
