@@ -351,18 +351,29 @@
         let checkInterval = setInterval(() => {
             if (window.AIAssistantDOMMonitor) {
                 clearInterval(checkInterval);
-                updateProgress(100);
-                updateStatus('✅ DOM Monitor V2 loaded successfully!', 'success');
-                logResult('api-results', 'DOM Monitor V2 detected and ready for testing');
+                updateProgress(50);
                 
-                // Auto-enable debug mode and start monitoring
-                setTimeout(() => {
-                    enableDebugMode();
-                    startCacheMonitoring();
-                    testInitialCompatibility();
-                }, 1000);
+                // Wait for full initialization
+                const waitForInitialization = setInterval(() => {
+                    if (window.AIAssistantDOMMonitor.isReady && window.AIAssistantDOMMonitor.isReady()) {
+                        clearInterval(waitForInitialization);
+                        updateProgress(100);
+                        updateStatus('✅ DOM Monitor V2 loaded and initialized successfully!', 'success');
+                        logResult('api-results', 'DOM Monitor V2 detected, initialized and ready for testing');
+                        
+                        // Auto-enable debug mode and start monitoring
+                        setTimeout(() => {
+                            enableDebugMode();
+                            startCacheMonitoring();
+                            testInitialCompatibility();
+                        }, 1000);
+                    } else {
+                        updateProgress(Math.min(progressValue + 2, 95));
+                        logResult('api-results', 'Waiting for DOM Monitor initialization...');
+                    }
+                }, 500);
             } else {
-                updateProgress(Math.min(progressValue + 5, 90));
+                updateProgress(Math.min(progressValue + 5, 50));
             }
         }, 500);
 
@@ -411,7 +422,7 @@
                 const isReady = window.AIAssistantDOMMonitor.isReady();
                 logResult('api-results', `isReady(): ${isReady}`);
 
-                // Test getStats
+                // Test getStats (should work after initialization)
                 const stats = window.AIAssistantDOMMonitor.getStats();
                 logResult('api-results', `getStats(): ${JSON.stringify(stats, null, 2)}`);
 
@@ -426,6 +437,7 @@
                 logResult('api-results', '\n✅ Basic API test completed successfully!');
             } catch (error) {
                 logResult('api-results', `❌ Basic API test failed: ${error.message}`);
+                console.error('Full error:', error);
             }
         }
 

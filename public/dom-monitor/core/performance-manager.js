@@ -442,6 +442,11 @@
       return { ...this.metrics }
     }
 
+    // COMPATIBILITY: Add getStats() as alias for getMetrics()
+    getStats() {
+      return this.getMetrics()
+    }
+
     reset() {
       this.metrics = {
         totalScans: 0,

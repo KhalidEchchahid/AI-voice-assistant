@@ -84,7 +84,7 @@
       
       // Add missing isReady method
       window.AIAssistantDOMMonitor.isReady = function() {
-        return window.DOMMonitor && window.DOMMonitor.isInitialized
+        return window.DOMMonitor && window.DOMMonitor.isReady && window.DOMMonitor.isReady()
       }
       
       // Add missing refresh method (maps to forceRescan)
@@ -99,7 +99,7 @@
       window.AIAssistantDOMMonitor.getStatus = function() {
         if (window.DOMMonitor) {
           return {
-            isReady: window.DOMMonitor.isInitialized || false,
+            isReady: window.DOMMonitor.isReady ? window.DOMMonitor.isReady() : false,
             isRunning: window.DOMMonitor.isRunning || false,
             version: "2.0.0",
             moduleStatus: window.DOMMonitor.getModuleStatus ? window.DOMMonitor.getModuleStatus() : {},
@@ -107,6 +107,39 @@
           }
         }
         return { isReady: false, isRunning: false, version: "unknown" }
+      }
+      
+      // Add getStats method (bridge to V2 getStats)
+      window.AIAssistantDOMMonitor.getStats = function() {
+        if (window.DOMMonitor && window.DOMMonitor.getStats) {
+          return window.DOMMonitor.getStats()
+        } else {
+          return {
+            version: "2.0.0",
+            isInitialized: false,
+            isRunning: false,
+            totalRequests: 0,
+            cache: { totalElements: 0, visibleElements: 0, interactableElements: 0 }
+          }
+        }
+      }
+      
+      // Add getAllElements method (bridge to V2 getAllElements)
+      window.AIAssistantDOMMonitor.getAllElements = function(filter = {}) {
+        if (window.DOMMonitor && window.DOMMonitor.getAllElements) {
+          return window.DOMMonitor.getAllElements(filter)
+        } else {
+          return []
+        }
+      }
+      
+      // Add findElements method (bridge to V2 findElements)
+      window.AIAssistantDOMMonitor.findElements = function(intent, options = {}) {
+        if (window.DOMMonitor && window.DOMMonitor.findElements) {
+          return window.DOMMonitor.findElements(intent, options)
+        } else {
+          return Promise.resolve([])
+        }
       }
       
       // Add _internal access for advanced usage

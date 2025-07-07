@@ -581,6 +581,13 @@
       }
     }
 
+    // NEW: Check if the monitor is ready for use
+    isReady() {
+      return this.isInitialized && this.isRunning && 
+             !!this.elementCache && !!this.performanceManager && 
+             !!this.domObserver && !!this.communicationBridge
+    }
+
     // Status broadcasting
     broadcastStatus(status, details = null) {
       if (this.communicationBridge) {

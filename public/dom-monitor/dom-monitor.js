@@ -140,6 +140,10 @@
       if (window.DOMMonitor) {
         console.log("✅ DOM Monitor: Global instance ready")
         
+        // CRITICAL FIX: Actually initialize the DOM Monitor
+        console.log("🔄 DOM Monitor: Starting initialization...")
+        await window.DOMMonitor.initialize()
+        
         // For backward compatibility, also expose as AIAssistantDOMMonitor
         window.AIAssistantDOMMonitor = window.DOMMonitor
       } else {
