@@ -232,17 +232,15 @@
         }
 
         function enableDebugMode() {
-            if (window.DOMMonitor) {
-                window.DOMMonitor.updateConfig({ debugMode: true });
-                logResult('api-results', '🔧 Debug mode enabled for DOM Monitor');
-                
-                // Also enable on element cache directly
-                if (window.DOMMonitor.elementCache) {
-                    window.DOMMonitor.elementCache.config.debugMode = true;
-                    logResult('api-results', '🔧 Debug mode enabled for Element Cache');
+            try {
+                if (window.DOMMonitor && window.DOMMonitor.updateConfig) {
+                    window.DOMMonitor.updateConfig({ debugMode: true });
+                    logResult('cache-monitor', '🐛 Debug mode enabled - You should now see element cache logs in console');
+                } else {
+                    logResult('cache-monitor', '❌ Debug mode failed - DOM Monitor not available');
                 }
-            } else {
-                logResult('api-results', '❌ DOM Monitor not available to enable debug mode');
+            } catch (error) {
+                logResult('cache-monitor', `❌ Debug mode error: ${error.message}`);
             }
         }
 
@@ -347,44 +345,42 @@
             document.getElementById(section).textContent = '';
         }
 
-        // Wait for DOM Monitor to load
-        let checkInterval = setInterval(() => {
-            if (window.AIAssistantDOMMonitor) {
-                clearInterval(checkInterval);
-                updateProgress(50);
+        // Enhanced DOM Monitor Detection
+        function waitForDOMMonitor() {
+            updateProgress(10);
+            logResult('api-results', 'Waiting for DOM Monitor V2 to load...');
+            
+            let attempts = 0;
+            const maxAttempts = 60; // 30 seconds at 500ms intervals
+            
+            const checkInterval = setInterval(() => {
+                attempts++;
+                updateProgress(10 + (attempts / maxAttempts) * 40); // Progress from 10% to 50%
                 
-                // Wait for full initialization
-                const waitForInitialization = setInterval(() => {
-                    if (window.AIAssistantDOMMonitor.isReady && window.AIAssistantDOMMonitor.isReady()) {
-                        clearInterval(waitForInitialization);
-                        updateProgress(100);
-                        updateStatus('✅ DOM Monitor V2 loaded and initialized successfully!', 'success');
-                        logResult('api-results', 'DOM Monitor V2 detected, initialized and ready for testing');
-                        
-                        // Auto-enable debug mode and start monitoring
-                        setTimeout(() => {
-                            enableDebugMode();
-                            startCacheMonitoring();
-                            testInitialCompatibility();
-                        }, 1000);
-                    } else {
-                        updateProgress(Math.min(progressValue + 2, 95));
-                        logResult('api-results', 'Waiting for DOM Monitor initialization...');
-                    }
-                }, 500);
-            } else {
-                updateProgress(Math.min(progressValue + 5, 50));
-            }
-        }, 500);
+                // Check for both window.DOMMonitor and completion messages
+                if (window.DOMMonitor && window.DOMMonitor.isReady && window.DOMMonitor.isReady()) {
+                    clearInterval(checkInterval);
+                    updateProgress(100);
+                    updateStatus('✅ DOM Monitor V2 loaded and initialized successfully!', 'success');
+                    logResult('api-results', 'DOM Monitor V2 detected and ready for testing');
+                    
+                    // Enable debug mode immediately
+                    enableDebugMode();
+                    
+                    // Auto-run compatibility test
+                    setTimeout(testBasicAPI, 1000);
+                    
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(checkInterval);
+                    updateProgress(100);
+                    updateStatus('❌ DOM Monitor V2 failed to load within 30 seconds', 'error');
+                    logResult('api-results', '❌ Timeout waiting for DOM Monitor V2');
+                }
+            }, 500);
+        }
 
-        // Timeout after 30 seconds
-        setTimeout(() => {
-            if (!window.AIAssistantDOMMonitor) {
-                clearInterval(checkInterval);
-                updateStatus('❌ DOM Monitor V2 failed to load within 30 seconds', 'error');
-                logResult('api-results', 'ERROR: DOM Monitor V2 load timeout');
-            }
-        }, 30000);
+        // Wait for DOM Monitor to load
+        waitForDOMMonitor();
 
         function testInitialCompatibility() {
             logResult('api-results', '🔍 Running initial compatibility check...');
@@ -419,25 +415,30 @@
 
             try {
                 // Test isReady
-                const isReady = window.AIAssistantDOMMonitor.isReady();
+                const isReady = window.DOMMonitor.isReady();
                 logResult('api-results', `isReady(): ${isReady}`);
 
                 // Test getStats (should work after initialization)
-                const stats = window.AIAssistantDOMMonitor.getStats();
+                const stats = window.DOMMonitor.getStats();
                 logResult('api-results', `getStats(): ${JSON.stringify(stats, null, 2)}`);
 
                 // Test getAllElements
-                const elements = window.AIAssistantDOMMonitor.getAllElements({ visible: true });
+                const elements = window.DOMMonitor.getAllElements({ visible: true });
                 logResult('api-results', `getAllElements(): Found ${elements.length} elements`);
+                
+                if (elements.length > 0) {
+                    logResult('api-results', `First element sample: ${JSON.stringify(elements[0], null, 2).substring(0, 200)}...`);
+                }
 
-                // Test findElements
-                const foundElements = await window.AIAssistantDOMMonitor.findElements('button');
-                logResult('api-results', `findElements('button'): Found ${foundElements.length} button elements`);
+                // Test healthCheck
+                const health = await window.DOMMonitor.healthCheck();
+                logResult('api-results', `healthCheck(): ${JSON.stringify(health, null, 2)}`);
 
                 logResult('api-results', '\n✅ Basic API test completed successfully!');
+                
             } catch (error) {
-                logResult('api-results', `❌ Basic API test failed: ${error.message}`);
-                console.error('Full error:', error);
+                logResult('api-results', `❌ API test failed: ${error.message}`);
+                console.error('API test error:', error);
             }
         }
 

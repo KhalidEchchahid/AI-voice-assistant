@@ -7,7 +7,7 @@
     constructor(config = {}) {
       this.config = {
         version: '2.0.0',
-        autoStart: config.autoStart !== false,
+        autoStart: config.autoStart !== false, // Keep auto-start for compatibility
         performanceMode: config.performanceMode || 'balanced', // 'performance', 'balanced', 'memory'
         debugMode: config.debugMode !== false, // Enable debug mode by default
         ...config
@@ -37,10 +37,11 @@
         cpuUsage: 0
       }
       
+      // DISABLED AUTO-START to prevent conflicts with external initialization
       // Auto-initialize if enabled
-      if (this.config.autoStart) {
-        this.initialize()
-      }
+      // if (this.config.autoStart) {
+      //   this.initialize()
+      // }
     }
 
     // Initialize all modules
@@ -58,9 +59,11 @@
         console.log("🚀 DOM Monitor: Initializing Live Monitor v" + this.config.version)
         
         // Initialize performance-aware configuration
+        console.log("🔧 DOM Monitor: Getting performance configuration...")
         const performanceConfig = this.getPerformanceConfig()
         
         // Initialize core modules in dependency order
+        console.log("🔧 DOM Monitor: Initializing core modules...")
         await this.initializePerformanceManager(performanceConfig)
         await this.initializeSerializer(performanceConfig)
         await this.initializeElementCache(performanceConfig)
@@ -68,12 +71,15 @@
         await this.initializeCommunicationBridge(performanceConfig)
         
         // Initialize enhancement modules
+        console.log("🔧 DOM Monitor: Initializing enhancement modules...")
         await this.initializeEnhancementModules(performanceConfig)
         
         // Wire up dependencies
+        console.log("🔧 DOM Monitor: Wiring up dependencies...")
         this.wireUpDependencies()
         
         // Start monitoring
+        console.log("🔧 DOM Monitor: Starting monitoring services...")
         await this.startMonitoring()
         
         this.isInitialized = true
@@ -228,10 +234,6 @@
 
     // Start monitoring
     async startMonitoring() {
-      if (!this.isInitialized) {
-        await this.initialize()
-      }
-      
       try {
         // CRITICAL FIX: Perform initial element scan to populate cache
         console.log("🔍 DOM Monitor: Performing initial element scan...")
@@ -273,6 +275,8 @@
         return
       }
 
+      console.log("🔍 DOM Monitor: Starting initial element scan...")
+
       const scanOperation = async () => {
         const relevantElements = document.querySelectorAll(
           'button, a, input, select, textarea, form, [role="button"], [tabindex], [onclick], [data-testid], [aria-label], .btn, .button, .clickable'
@@ -288,6 +292,9 @@
             const elementId = await this.elementCache.addElement(element)
             if (elementId) {
               addedCount++
+              if (this.config.debugMode) {
+                console.debug(`📦 DOM Monitor: Cached element ${elementId}:`, element.tagName)
+              }
             } else {
               skippedCount++
             }
@@ -306,22 +313,43 @@
         }
       }
 
-      if (this.performanceManager) {
-        const result = await this.performanceManager.executeWithBudget(
-          scanOperation,
-          200, // Allow up to 200ms for initial scan
-          'initialElementScan'
-        )
-        
-        if (result.success) {
-          console.log("✅ DOM Monitor: Initial element scan completed successfully")
-          return result.result
-        } else if (result.throttled) {
-          console.warn("⚠️ DOM Monitor: Initial scan was throttled, will continue in background")
-          // Continue anyway, background processing will catch up
+      try {
+        // Add timeout protection to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Initial scan timeout')), 5000) // 5 second timeout
+        })
+
+        let result
+        if (this.performanceManager) {
+          const budgetPromise = this.performanceManager.executeWithBudget(
+            scanOperation,
+            200, // Allow up to 200ms for initial scan
+            'initialElementScan'
+          )
+          
+          result = await Promise.race([budgetPromise, timeoutPromise])
+          
+          if (result.success) {
+            console.log("✅ DOM Monitor: Initial element scan completed successfully")
+            return result.result
+          } else if (result.throttled) {
+            console.warn("⚠️ DOM Monitor: Initial scan was throttled, will continue in background")
+            // Continue anyway, background processing will catch up
+          }
+        } else {
+          console.log("🔍 DOM Monitor: Running scan without performance manager")
+          result = await Promise.race([scanOperation(), timeoutPromise])
+          return result
         }
-      } else {
-        return await scanOperation()
+      } catch (error) {
+        console.error("❌ DOM Monitor: Initial scan failed:", error)
+        // Don't throw - allow initialization to continue even if scan fails
+        return {
+          totalScanned: 0,
+          added: 0,
+          skipped: 0,
+          error: error.message
+        }
       }
     }
 

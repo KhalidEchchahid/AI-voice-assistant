@@ -60,7 +60,6 @@
       }
       
       this.setupMessageHandlers()
-      this.startListening()
     }
 
     // Initialize with dependencies
@@ -68,6 +67,9 @@
       this.elementCache = elementCache
       this.serializer = serializer
       this.performanceManager = performanceManager
+      
+      // Auto-start listening after initialization
+      this.startListening()
       
       console.log("✅ DOM Monitor: Communication Bridge initialized")
     }
