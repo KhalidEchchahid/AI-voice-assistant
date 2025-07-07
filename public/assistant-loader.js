@@ -39,20 +39,20 @@
 
   // Load the DOM Monitor script for real-time element discovery
   function loadDOMMonitorScript() {
-    if (window.AIAssistantDOMMonitor) {
+    if (window.AIAssistantDOMMonitor || window.DOMMonitor) {
       console.log("AI Assistant Loader: DOM Monitor already loaded")
       return
     }
     
-    // Resolve DOM monitor script URL
-    let monitorSrc = 'live-dom-monitor.js'
+    // Load the new V2 modular DOM monitor
+    let monitorSrc = 'dom-monitor/dom-monitor.js'
 
     try {
       const current = document.currentScript || document.querySelector('script[src*="assistant-loader"]')
 
       if (current && current.src) {
         const url = new URL(current.src, window.location.href)
-        url.pathname = url.pathname.replace(/[^/]*$/, 'live-dom-monitor.js')
+        url.pathname = url.pathname.replace(/[^/]*$/, 'dom-monitor/dom-monitor.js')
         monitorSrc = url.href
       }
     } catch (err) {
@@ -61,8 +61,123 @@
 
     const script = document.createElement('script')
     script.src = monitorSrc
-    script.onload = () => console.log(`AI Assistant Loader: DOM Monitor script loaded successfully from ${monitorSrc}`)
-    script.onerror = () => console.error(`AI Assistant Loader: Failed to load DOM Monitor script from ${monitorSrc}`)
+    script.onload = () => {
+      console.log(`AI Assistant Loader: DOM Monitor V2 script loaded successfully from ${monitorSrc}`)
+      
+      // Add compatibility layer for missing methods after V2 loads
+      setTimeout(() => {
+        addDOMMonitorCompatibilityLayer()
+      }, 1000) // Wait for V2 to fully initialize
+    }
+    script.onerror = () => {
+      console.error(`AI Assistant Loader: Failed to load DOM Monitor V2 script from ${monitorSrc}`)
+      // Fallback to old version if V2 fails
+      loadFallbackDOMMonitor()
+    }
+    document.head.appendChild(script)
+  }
+
+  // Add compatibility layer for API methods expected by existing code
+  function addDOMMonitorCompatibilityLayer() {
+    if (window.AIAssistantDOMMonitor && !window.AIAssistantDOMMonitor.isReady) {
+      console.log("AI Assistant Loader: Adding DOM Monitor V2 compatibility layer")
+      
+      // Add missing isReady method
+      window.AIAssistantDOMMonitor.isReady = function() {
+        return window.DOMMonitor && window.DOMMonitor.isInitialized
+      }
+      
+      // Add missing refresh method (maps to forceRescan)
+      window.AIAssistantDOMMonitor.refresh = function() {
+        if (window.DOMMonitor && window.DOMMonitor.forceRescan) {
+          return window.DOMMonitor.forceRescan()
+        }
+        return { success: false, error: "DOM Monitor not ready" }
+      }
+      
+      // Add missing getStatus method
+      window.AIAssistantDOMMonitor.getStatus = function() {
+        if (window.DOMMonitor) {
+          return {
+            isReady: window.DOMMonitor.isInitialized || false,
+            isRunning: window.DOMMonitor.isRunning || false,
+            version: "2.0.0",
+            moduleStatus: window.DOMMonitor.getModuleStatus ? window.DOMMonitor.getModuleStatus() : {},
+            health: window.DOMMonitor.healthCheck ? window.DOMMonitor.healthCheck() : { isHealthy: true }
+          }
+        }
+        return { isReady: false, isRunning: false, version: "unknown" }
+      }
+      
+      // Add _internal access for advanced usage
+      if (!window.AIAssistantDOMMonitor._internal) {
+        window.AIAssistantDOMMonitor._internal = {
+          monitor: {
+            // Bridge the handleElementQuery method to V2's findByIntent
+            handleElementQuery: function(payload) {
+              const { intent, options = {} } = payload
+              
+              if (!window.DOMMonitor) {
+                return {
+                  success: false,
+                  error: "DOM Monitor not ready",
+                  timestamp: Date.now()
+                }
+              }
+              
+              try {
+                const results = window.DOMMonitor.findElements(intent, options)
+                return Promise.resolve(results).then(elements => ({
+                  success: true,
+                  elements: elements || [],
+                  total: (elements || []).length,
+                  confidence: elements && elements.length > 0 ? 0.8 : 0,
+                  timestamp: Date.now(),
+                  stats: window.DOMMonitor.getStats()
+                }))
+              } catch (error) {
+                return {
+                  success: false,
+                  error: error.message,
+                  timestamp: Date.now()
+                }
+              }
+            },
+            // Also expose the base DOMMonitor for other uses
+            ...window.DOMMonitor
+          },
+          get cache() { return window.DOMMonitor?.elementCache },
+          get observer() { return window.DOMMonitor?.domObserver },
+          get bridge() { return window.DOMMonitor?.communicationBridge }
+        }
+      }
+      
+      console.log("✅ AI Assistant Loader: DOM Monitor V2 compatibility layer added")
+    }
+  }
+  
+  // Fallback to old DOM monitor if V2 fails
+  function loadFallbackDOMMonitor() {
+    console.log("AI Assistant Loader: Loading fallback DOM monitor")
+    
+    let fallbackSrc = 'live-dom-monitor-v0.js'
+
+    try {
+      const current = document.currentScript || document.querySelector('script[src*="assistant-loader"]')
+
+      if (current && current.src) {
+        const url = new URL(current.src, window.location.href)
+        url.pathname = url.pathname.replace(/[^/]*$/, 'live-dom-monitor-v0.js')
+        fallbackSrc = url.href
+      }
+    } catch (err) {
+      console.warn('AI Assistant Loader: Could not determine base path for fallback DOM monitor', err)
+    }
+
+    const script = document.createElement('script')
+    script.src = fallbackSrc
+    script.onload = () => console.log(`AI Assistant Loader: Fallback DOM Monitor loaded from ${fallbackSrc}`)
+    script.onerror = () => console.error(`AI Assistant Loader: Fallback DOM Monitor also failed to load`)
     document.head.appendChild(script)
   }
 

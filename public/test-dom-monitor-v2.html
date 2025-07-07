@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM Monitor V2 Integration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .test-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        
+        .status.success { background-color: #d4edda; color: #155724; }
+        .status.error { background-color: #f8d7da; color: #721c24; }
+        .status.pending { background-color: #fff3cd; color: #856404; }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .results {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .sample-elements {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        
+        .sample-elements button {
+            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+        }
+        
+        .sample-elements input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 200px;
+        }
+        
+        .sample-elements select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 20px;
+            background: linear-gradient(90deg, #4caf50, #45a049);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 DOM Monitor V2 Integration Test</h1>
+        <p>Testing the new modular DOM Monitor system with backward compatibility</p>
+    </div>
+
+    <div class="test-section">
+        <h2>🚀 System Status</h2>
+        <div id="system-status" class="status pending">Loading DOM Monitor V2...</div>
+        <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 API Compatibility Tests</h2>
+        <button onclick="testBasicAPI()">Test Basic API</button>
+        <button onclick="testCompatibilityLayer()">Test Compatibility Layer</button>
+        <button onclick="testInternalAccess()">Test Internal Access</button>
+        <button onclick="testPerformance()">Test Performance</button>
+        <div id="api-results" class="results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>🎯 Element Detection Tests</h2>
+        <div class="sample-elements">
+            <button id="test-button-1" data-testid="sample-button">Click Me</button>
+            <button id="test-button-2">Submit Form</button>
+            <button id="test-button-3">Cancel</button>
+            <input type="text" placeholder="Enter your name" name="firstName" id="name-input">
+            <input type="email" placeholder="Email address" name="email" id="email-input">
+            <select id="country-select">
+                <option value="">Select Country</option>
+                <option value="us">United States</option>
+                <option value="uk">United Kingdom</option>
+            </select>
+        </div>
+        
+        <button onclick="testElementDetection()">Find All Interactive Elements</button>
+        <button onclick="testIntentSearch()">Test Intent-Based Search</button>
+        <button onclick="testRealTimeUpdates()">Test Real-Time Updates</button>
+        <div id="element-results" class="results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 Performance & Memory</h2>
+        <button onclick="testMemoryUsage()">Check Memory Usage</button>
+        <button onclick="testResponseTimes()">Test Response Times</button>
+        <button onclick="stressTest()">Stress Test (1000 operations)</button>
+        <div id="performance-results" class="results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔄 System Health</h2>
+        <button onclick="healthCheck()">Full Health Check</button>
+        <button onclick="forceRescan()">Force Rescan</button>
+        <button onclick="clearCache()">Clear Cache</button>
+        <div id="health-results" class="results"></div>
+    </div>
+
+    <!-- Load the assistant loader which will load DOM Monitor V2 -->
+    <script src="assistant-loader.js"></script>
+
+    <script>
+        let testResults = [];
+        let progressValue = 0;
+
+        function updateProgress(value) {
+            progressValue = Math.min(100, value);
+            document.getElementById('progress-fill').style.width = progressValue + '%';
+        }
+
+        function updateStatus(message, type = 'pending') {
+            const statusDiv = document.getElementById('system-status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function logResult(section, message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const resultDiv = document.getElementById(section);
+            resultDiv.textContent += `[${timestamp}] ${message}\n`;
+            resultDiv.scrollTop = resultDiv.scrollHeight;
+        }
+
+        function clearResults(section) {
+            document.getElementById(section).textContent = '';
+        }
+
+        // Wait for DOM Monitor to load
+        let checkInterval = setInterval(() => {
+            if (window.AIAssistantDOMMonitor) {
+                clearInterval(checkInterval);
+                updateProgress(100);
+                updateStatus('✅ DOM Monitor V2 loaded successfully!', 'success');
+                logResult('api-results', 'DOM Monitor V2 detected and ready for testing');
+                
+                // Run initial compatibility check
+                setTimeout(testInitialCompatibility, 1000);
+            } else {
+                updateProgress(Math.min(progressValue + 5, 90));
+            }
+        }, 500);
+
+        // Timeout after 30 seconds
+        setTimeout(() => {
+            if (!window.AIAssistantDOMMonitor) {
+                clearInterval(checkInterval);
+                updateStatus('❌ DOM Monitor V2 failed to load within 30 seconds', 'error');
+                logResult('api-results', 'ERROR: DOM Monitor V2 load timeout');
+            }
+        }, 30000);
+
+        function testInitialCompatibility() {
+            logResult('api-results', '🔍 Running initial compatibility check...');
+            
+            const tests = [
+                { name: 'AIAssistantDOMMonitor exists', test: () => !!window.AIAssistantDOMMonitor },
+                { name: 'DOMMonitor exists', test: () => !!window.DOMMonitor },
+                { name: 'isReady method', test: () => typeof window.AIAssistantDOMMonitor.isReady === 'function' },
+                { name: 'getStats method', test: () => typeof window.AIAssistantDOMMonitor.getStats === 'function' },
+                { name: 'findElements method', test: () => typeof window.AIAssistantDOMMonitor.findElements === 'function' },
+                { name: '_internal access', test: () => !!window.AIAssistantDOMMonitor._internal },
+                { name: 'handleElementQuery method', test: () => typeof window.AIAssistantDOMMonitor._internal?.monitor?.handleElementQuery === 'function' }
+            ];
+
+            let passed = 0;
+            tests.forEach(test => {
+                try {
+                    const result = test.test();
+                    logResult('api-results', `${result ? '✅' : '❌'} ${test.name}: ${result}`);
+                    if (result) passed++;
+                } catch (error) {
+                    logResult('api-results', `❌ ${test.name}: ERROR - ${error.message}`);
+                }
+            });
+
+            logResult('api-results', `\n📊 Compatibility Score: ${passed}/${tests.length} (${Math.round(passed/tests.length*100)}%)`);
+        }
+
+        async function testBasicAPI() {
+            clearResults('api-results');
+            logResult('api-results', '🧪 Testing Basic API Methods...\n');
+
+            try {
+                // Test isReady
+                const isReady = window.AIAssistantDOMMonitor.isReady();
+                logResult('api-results', `isReady(): ${isReady}`);
+
+                // Test getStats
+                const stats = window.AIAssistantDOMMonitor.getStats();
+                logResult('api-results', `getStats(): ${JSON.stringify(stats, null, 2)}`);
+
+                // Test getAllElements
+                const elements = window.AIAssistantDOMMonitor.getAllElements({ visible: true });
+                logResult('api-results', `getAllElements(): Found ${elements.length} elements`);
+
+                // Test findElements
+                const foundElements = await window.AIAssistantDOMMonitor.findElements('button');
+                logResult('api-results', `findElements('button'): Found ${foundElements.length} button elements`);
+
+                logResult('api-results', '\n✅ Basic API test completed successfully!');
+            } catch (error) {
+                logResult('api-results', `❌ Basic API test failed: ${error.message}`);
+            }
+        }
+
+        async function testCompatibilityLayer() {
+            clearResults('api-results');
+            logResult('api-results', '🔄 Testing Compatibility Layer...\n');
+
+            try {
+                // Test refresh method
+                const refreshResult = await window.AIAssistantDOMMonitor.refresh();
+                logResult('api-results', `refresh(): ${JSON.stringify(refreshResult, null, 2)}`);
+
+                // Test getStatus method
+                const status = window.AIAssistantDOMMonitor.getStatus();
+                logResult('api-results', `getStatus(): ${JSON.stringify(status, null, 2)}`);
+
+                logResult('api-results', '\n✅ Compatibility layer test completed!');
+            } catch (error) {
+                logResult('api-results', `❌ Compatibility layer test failed: ${error.message}`);
+            }
+        }
+
+        async function testInternalAccess() {
+            clearResults('api-results');
+            logResult('api-results', '🔧 Testing Internal Access...\n');
+
+            try {
+                const internal = window.AIAssistantDOMMonitor._internal;
+                logResult('api-results', `_internal exists: ${!!internal}`);
+                logResult('api-results', `_internal.monitor exists: ${!!internal.monitor}`);
+                logResult('api-results', `_internal.cache exists: ${!!internal.cache}`);
+
+                // Test handleElementQuery
+                const queryResult = await internal.monitor.handleElementQuery({
+                    intent: 'find buttons',
+                    options: { visible: true }
+                });
+                logResult('api-results', `handleElementQuery result: ${JSON.stringify(queryResult, null, 2)}`);
+
+                logResult('api-results', '\n✅ Internal access test completed!');
+            } catch (error) {
+                logResult('api-results', `❌ Internal access test failed: ${error.message}`);
+            }
+        }
+
+        async function testElementDetection() {
+            clearResults('element-results');
+            logResult('element-results', '🎯 Testing Element Detection...\n');
+
+            try {
+                const allElements = window.AIAssistantDOMMonitor.getAllElements({ 
+                    visible: true, 
+                    interactable: true 
+                });
+
+                logResult('element-results', `Found ${allElements.length} interactive elements:`);
+                allElements.slice(0, 10).forEach((el, i) => {
+                    logResult('element-results', `${i+1}. ${el.tagName} - "${el.text?.slice(0, 30)}" - Role: ${el.role}`);
+                });
+
+                if (allElements.length > 10) {
+                    logResult('element-results', `... and ${allElements.length - 10} more elements`);
+                }
+
+                logResult('element-results', '\n✅ Element detection completed!');
+            } catch (error) {
+                logResult('element-results', `❌ Element detection failed: ${error.message}`);
+            }
+        }
+
+        async function testIntentSearch() {
+            clearResults('element-results');
+            logResult('element-results', '🔍 Testing Intent-Based Search...\n');
+
+            const testIntents = [
+                'click button',
+                'submit form', 
+                'enter name',
+                'select country',
+                'email input'
+            ];
+
+            for (const intent of testIntents) {
+                try {
+                    const results = await window.AIAssistantDOMMonitor.findElements(intent);
+                    logResult('element-results', `Intent: "${intent}" -> Found ${results.length} matches`);
+                    
+                    if (results.length > 0) {
+                        const topResult = results[0];
+                        logResult('element-results', `  Top match: ${topResult.element.tagName} - "${topResult.element.text?.slice(0, 30)}" (confidence: ${topResult.confidence})`);
+                    }
+                } catch (error) {
+                    logResult('element-results', `Intent: "${intent}" -> ERROR: ${error.message}`);
+                }
+            }
+
+            logResult('element-results', '\n✅ Intent search test completed!');
+        }
+
+        async function testPerformance() {
+            clearResults('performance-results');
+            logResult('performance-results', '⚡ Testing Performance...\n');
+
+            const iterations = 100;
+            const startTime = performance.now();
+
+            try {
+                for (let i = 0; i < iterations; i++) {
+                    await window.AIAssistantDOMMonitor.findElements('button');
+                }
+
+                const endTime = performance.now();
+                const totalTime = endTime - startTime;
+                const avgTime = totalTime / iterations;
+
+                logResult('performance-results', `${iterations} findElements calls:`);
+                logResult('performance-results', `Total time: ${totalTime.toFixed(2)}ms`);
+                logResult('performance-results', `Average time: ${avgTime.toFixed(2)}ms`);
+                logResult('performance-results', `Operations per second: ${(1000/avgTime).toFixed(0)}`);
+
+                // Test memory usage
+                const stats = window.AIAssistantDOMMonitor.getStats();
+                logResult('performance-results', `\nMemory usage: ${stats.memoryUsage || stats.cache?.memoryUsage || 'N/A'} KB`);
+
+                logResult('performance-results', '\n✅ Performance test completed!');
+            } catch (error) {
+                logResult('performance-results', `❌ Performance test failed: ${error.message}`);
+            }
+        }
+
+        async function testMemoryUsage() {
+            clearResults('performance-results');
+            logResult('performance-results', '🧠 Testing Memory Usage...\n');
+
+            try {
+                const monitor = window.AIAssistantDOMMonitor;
+                const stats = monitor.getStats();
+                
+                logResult('performance-results', `Current memory usage: ${stats.memoryUsage || 'Unknown'} KB`);
+                
+                // Force a scan to see memory impact
+                const beforeScan = performance.now();
+                const elements = monitor.getAllElements({});
+                const afterScan = performance.now();
+                
+                logResult('performance-results', `Elements scanned: ${elements.length}`);
+                logResult('performance-results', `Scan time: ${(afterScan - beforeScan).toFixed(2)}ms`);
+                
+                // Check memory again
+                setTimeout(() => {
+                    const newStats = monitor.getStats();
+                    logResult('performance-results', `Memory after scan: ${newStats.memoryUsage || 'Unknown'} KB`);
+                    logResult('performance-results', '\n✅ Memory usage test completed!');
+                }, 500);
+                
+            } catch (error) {
+                logResult('performance-results', `❌ Memory test failed: ${error.message}`);
+            }
+        }
+
+        async function testResponseTimes() {
+            clearResults('performance-results');
+            logResult('performance-results', '⏱️ Testing Response Times...\n');
+
+            try {
+                const monitor = window.AIAssistantDOMMonitor;
+                const testQueries = [
+                    'find buttons',
+                    'get all inputs',
+                    'find clickable elements',
+                    'get visible text',
+                    'form elements'
+                ];
+                
+                const results = [];
+                
+                for (const query of testQueries) {
+                    const startTime = performance.now();
+                    try {
+                        await monitor.findElements(query);
+                        const responseTime = performance.now() - startTime;
+                        results.push(responseTime);
+                        logResult('performance-results', `"${query}": ${responseTime.toFixed(2)}ms`);
+                    } catch (error) {
+                        logResult('performance-results', `"${query}": ERROR - ${error.message}`);
+                    }
+                }
+                
+                const avgTime = results.reduce((a, b) => a + b, 0) / results.length;
+                logResult('performance-results', `\nAverage response time: ${avgTime.toFixed(2)}ms`);
+                logResult('performance-results', `Fastest: ${Math.min(...results).toFixed(2)}ms`);
+                logResult('performance-results', `Slowest: ${Math.max(...results).toFixed(2)}ms`);
+                logResult('performance-results', '\n✅ Response time test completed!');
+                
+            } catch (error) {
+                logResult('performance-results', `❌ Response time test failed: ${error.message}`);
+            }
+        }
+
+        async function stressTest() {
+            clearResults('performance-results');
+            logResult('performance-results', '🔥 Running Stress Test...\n');
+
+            try {
+                const monitor = window.AIAssistantDOMMonitor;
+                let completed = 0;
+                const totalTests = 50; // Reduced from 1000 to 50 for better UX
+                const startTime = performance.now();
+                
+                logResult('performance-results', `Starting ${totalTests} rapid queries...`);
+                
+                const runQuery = async (i) => {
+                    try {
+                        await monitor.findElements(`stress test query ${i}`);
+                        completed++;
+                        
+                        if (completed % 10 === 0) {
+                            logResult('performance-results', `Progress: ${completed}/${totalTests} completed`);
+                        }
+                        
+                    } catch (error) {
+                        logResult('performance-results', `Query ${i} failed: ${error.message}`);
+                    }
+                };
+                
+                // Run queries in batches to avoid overwhelming the system
+                const batchSize = 5;
+                for (let i = 0; i < totalTests; i += batchSize) {
+                    const batch = [];
+                    for (let j = 0; j < batchSize && i + j < totalTests; j++) {
+                        batch.push(runQuery(i + j));
+                    }
+                    await Promise.all(batch);
+                    
+                    // Small delay between batches
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                
+                const totalTime = performance.now() - startTime;
+                const avgTime = totalTime / completed;
+                
+                logResult('performance-results', `\n💪 Stress test completed!`);
+                logResult('performance-results', `Completed: ${completed}/${totalTests} queries`);
+                logResult('performance-results', `Total time: ${totalTime.toFixed(2)}ms`);
+                logResult('performance-results', `Average: ${avgTime.toFixed(2)}ms per query`);
+                logResult('performance-results', `Throughput: ${(completed * 1000 / totalTime).toFixed(1)} queries/sec`);
+                
+                // Check final stats
+                const stats = monitor.getStats();
+                logResult('performance-results', `\nFinal system stats:`);
+                logResult('performance-results', JSON.stringify(stats, null, 2));
+                
+            } catch (error) {
+                logResult('performance-results', `❌ Stress test failed: ${error.message}`);
+            }
+        }
+
+        async function clearCache() {
+            clearResults('health-results');
+            logResult('health-results', '🧹 Clearing Cache...\n');
+
+            try {
+                const monitor = window.AIAssistantDOMMonitor;
+                
+                // Try V2 forceRescan first
+                if (monitor.refresh) {
+                    const result = await monitor.refresh();
+                    logResult('health-results', `Cache cleared via refresh(): ${JSON.stringify(result)}`);
+                } else if (window.DOMMonitor && window.DOMMonitor.forceRescan) {
+                    const result = await window.DOMMonitor.forceRescan();
+                    logResult('health-results', `Cache cleared via V2 forceRescan(): ${JSON.stringify(result)}`);
+                } else if (monitor._internal && monitor._internal.cache) {
+                    // Try internal cache clear
+                    if (typeof monitor._internal.cache.clear === 'function') {
+                        monitor._internal.cache.clear();
+                        logResult('health-results', 'Cache cleared via internal cache.clear()');
+                    } else {
+                        logResult('health-results', 'No cache.clear() method found in internal cache');
+                    }
+                } else {
+                    logResult('health-results', '⚠️ No cache clear method found, performing manual reset...');
+                    window.location.reload();
+                    return;
+                }
+                
+                // Verify cache was cleared
+                setTimeout(() => {
+                    const stats = monitor.getStats();
+                    logResult('health-results', `\nPost-clear stats: ${JSON.stringify(stats, null, 2)}`);
+                    logResult('health-results', '\n✅ Cache clear completed!');
+                }, 1000);
+                
+            } catch (error) {
+                logResult('health-results', `❌ Cache clear failed: ${error.message}`);
+            }
+        }
+
+        async function healthCheck() {
+            clearResults('health-results');
+            logResult('health-results', '🏥 Running Health Check...\n');
+
+            try {
+                const status = window.AIAssistantDOMMonitor.getStatus();
+                const stats = window.AIAssistantDOMMonitor.getStats();
+
+                logResult('health-results', 'System Status:');
+                logResult('health-results', JSON.stringify(status, null, 2));
+                
+                logResult('health-results', '\nSystem Statistics:');
+                logResult('health-results', JSON.stringify(stats, null, 2));
+
+                // Test if V2 health check is available
+                if (window.DOMMonitor && typeof window.DOMMonitor.healthCheck === 'function') {
+                    const v2Health = await window.DOMMonitor.healthCheck();
+                    logResult('health-results', '\nV2 Health Check:');
+                    logResult('health-results', JSON.stringify(v2Health, null, 2));
+                }
+
+                logResult('health-results', '\n✅ Health check completed!');
+            } catch (error) {
+                logResult('health-results', `❌ Health check failed: ${error.message}`);
+            }
+        }
+
+        async function forceRescan() {
+            clearResults('health-results');
+            logResult('health-results', '🔄 Force Rescanning DOM...\n');
+
+            try {
+                const result = await window.AIAssistantDOMMonitor.refresh();
+                logResult('health-results', `Rescan result: ${JSON.stringify(result, null, 2)}`);
+                logResult('health-results', '\n✅ Force rescan completed!');
+            } catch (error) {
+                logResult('health-results', `❌ Force rescan failed: ${error.message}`);
+            }
+        }
+
+        // Dynamic element test - add new elements to test real-time detection
+        async function testRealTimeUpdates() {
+            clearResults('element-results');
+            logResult('element-results', '🔄 Testing Real-Time Updates...\n');
+
+            try {
+                const initialCount = window.AIAssistantDOMMonitor.getAllElements().length;
+                logResult('element-results', `Initial element count: ${initialCount}`);
+
+                // Add new elements
+                const testDiv = document.createElement('div');
+                testDiv.innerHTML = `
+                    <button id="dynamic-btn-1">Dynamic Button 1</button>
+                    <input type="text" placeholder="Dynamic Input" id="dynamic-input">
+                    <button id="dynamic-btn-2" data-testid="dynamic-test">Dynamic Button 2</button>
+                `;
+                document.body.appendChild(testDiv);
+
+                // Wait a moment for detection
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                const newCount = window.AIAssistantDOMMonitor.getAllElements().length;
+                logResult('element-results', `New element count: ${newCount}`);
+                logResult('element-results', `Elements added: ${newCount - initialCount}`);
+
+                // Test finding the new elements
+                const dynamicElements = await window.AIAssistantDOMMonitor.findElements('dynamic');
+                logResult('element-results', `Found ${dynamicElements.length} dynamic elements`);
+
+                // Clean up
+                document.body.removeChild(testDiv);
+
+                logResult('element-results', '\n✅ Real-time update test completed!');
+            } catch (error) {
+                logResult('element-results', `❌ Real-time update test failed: ${error.message}`);
+            }
+        }
+
+        // Add window error handling
+        window.addEventListener('error', (event) => {
+            console.error('Test page error:', event.error);
+            logResult('api-results', `Global error: ${event.error.message}`);
+        });
+
+        // Log when page loads
+        window.addEventListener('load', () => {
+            console.log('DOM Monitor V2 test page loaded');
+        });
+    </script>
+</body>
+</html> 

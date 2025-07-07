@@ -29,6 +29,50 @@
       this.pendingOperations = []
       this.lastCleanup = Date.now()
       this.processingQueue = false
+      this.monitoredModules = new Map() // Track monitored modules for performance
+    }
+
+    // Add monitored module for performance tracking
+    addMonitoredModule(name, moduleInstance) {
+      if (!name || !moduleInstance) {
+        console.warn("DOM Monitor: Invalid module for performance monitoring:", { name, moduleInstance })
+        return
+      }
+
+      this.monitoredModules.set(name, moduleInstance)
+      
+      if (this.config.debugMode) {
+        console.log(`🔧 DOM Monitor: Added monitored module: ${name}`)
+      }
+    }
+
+    // Remove monitored module
+    removeMonitoredModule(name) {
+      return this.monitoredModules.delete(name)
+    }
+
+    // Get monitored module
+    getMonitoredModule(name) {
+      return this.monitoredModules.get(name)
+    }
+
+    // Get all monitored modules
+    getMonitoredModules() {
+      return Array.from(this.monitoredModules.keys())
+    }
+
+    // Cleanup method for monitored modules
+    cleanup() {
+      // Clean up any resources from monitored modules
+      this.monitoredModules.forEach((module, name) => {
+        if (module && typeof module.cleanup === 'function') {
+          try {
+            module.cleanup()
+          } catch (error) {
+            console.warn(`DOM Monitor: Error cleaning up module ${name}:`, error)
+          }
+        }
+      })
     }
 
     // Performance Guard - executes function within time budget

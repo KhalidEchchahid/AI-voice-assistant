@@ -36,13 +36,28 @@
         lastMessageTime: 0
       }
       
-      // Security
+      // Security - Dynamic origin detection
       this.allowedOrigins = new Set([
         'http://localhost:3000',
         'http://localhost:8000',
         'https://localhost:3000',
         'https://localhost:8000'
       ])
+      
+      // Add current origin automatically
+      if (window.location.origin) {
+        this.allowedOrigins.add(window.location.origin)
+      }
+      
+      // Add common development ports
+      const currentHost = window.location.hostname
+      if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+        const commonPorts = [3000, 3001, 3002, 8000, 8001, 8080, 5000]
+        commonPorts.forEach(port => {
+          this.allowedOrigins.add(`http://${currentHost}:${port}`)
+          this.allowedOrigins.add(`https://${currentHost}:${port}`)
+        })
+      }
       
       this.setupMessageHandlers()
       this.startListening()
