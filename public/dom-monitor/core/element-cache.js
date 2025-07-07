@@ -90,6 +90,10 @@
           this.updateAccessCount(elementId)
           this.stats.cacheHits++
           
+          if (this.isDebug()) {
+            console.debug("📦 DOM Monitor: Cache UPDATED", { elementId, tag: element.tagName, text: existing.basicData?.text })
+          }
+          
           return elementId
         }
         
@@ -104,6 +108,10 @@
         this.updateAccessCount(elementId)
         this.updateStats(elementData)
         this.stats.cacheMisses++
+        
+        if (this.isDebug()) {
+          console.debug("📦 DOM Monitor: Cache ADD", { elementId, tag: element.tagName, text: elementData.basicData?.text })
+        }
         
         return elementId
         
@@ -473,6 +481,10 @@
       const data = this.cache.get(elementId)
       if (!data) return
       
+      if (this.isDebug()) {
+        console.debug("📦 DOM Monitor: Cache REMOVE", { elementId, tag: data.basicData?.tagName, text: data.basicData?.text })
+      }
+      
       // Remove from cache
       this.cache.delete(elementId)
       this.accessCount.delete(elementId)
@@ -677,6 +689,11 @@
         indexUpdates: 0,
         lastCleanup: Date.now()
       }
+    }
+
+    // NEW: helper to detect debug mode
+    isDebug() {
+      return this.config.debugMode || (window.DOMMonitor && window.DOMMonitor.config && window.DOMMonitor.config.debugMode)
     }
   }
 
