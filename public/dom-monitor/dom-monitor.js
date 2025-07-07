@@ -94,6 +94,14 @@
       
       return true
     }
+
+    // NEW: Sequential loader to ensure dependency order (e.g., core modules)
+    async loadModulesSequentially(moduleList) {
+      for (const module of moduleList) {
+        await this.loadModule(module)
+      }
+      return true
+    }
   }
 
   // Initialize the DOM Monitor system
@@ -105,7 +113,7 @@
       
       // Load core modules first
       console.log("📦 DOM Monitor: Loading core modules...")
-      await loader.loadModules(DOM_MONITOR_CONFIG.modules.core.map(m => `core/${m}`))
+      await loader.loadModulesSequentially(DOM_MONITOR_CONFIG.modules.core.map(m => `core/${m}`))
       
       // Load enhancement modules
       console.log("🔧 DOM Monitor: Loading enhancement modules...")
