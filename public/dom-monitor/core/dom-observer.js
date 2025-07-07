@@ -9,6 +9,7 @@
         observeInterval: config.observeInterval || 1000,
         maxMutationsPerBatch: config.maxMutationsPerBatch || 50,
         throttleDelay: config.throttleDelay || 100,
+        debugMode: config.debugMode || false,
         ...config
       }
       
@@ -40,6 +41,36 @@
       
       // Throttled processing
       this.processThrottled = this.createThrottledProcessor()
+    }
+
+    // Helper to check debug mode
+    isDebugMode() {
+      return this.config.debugMode || 
+             (window.DOMMonitor && window.DOMMonitor.config && window.DOMMonitor.config.debugMode)
+    }
+
+    // Helper to check if element is relevant for caching
+    isRelevantElement(element) {
+      if (!element || element.nodeType !== Node.ELEMENT_NODE) return false
+      
+      // Check by tag name
+      const relevantTags = ['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA', 'FORM']
+      if (relevantTags.includes(element.tagName)) return true
+      
+      // Check by attributes
+      if (element.hasAttribute('role') && element.getAttribute('role') === 'button') return true
+      if (element.hasAttribute('tabindex')) return true
+      if (element.hasAttribute('onclick')) return true
+      if (element.hasAttribute('data-testid')) return true
+      if (element.hasAttribute('aria-label')) return true
+      
+      // Check by class
+      if (element.className && typeof element.className === 'string') {
+        const classes = element.className.toLowerCase()
+        if (classes.includes('btn') || classes.includes('button') || classes.includes('clickable')) return true
+      }
+      
+      return false
     }
 
     // Initialize with dependencies
@@ -224,24 +255,42 @@
     async processAddedElement(element, processedElements) {
       if (processedElements.has(element)) return
       
-      // Add to cache if relevant
-      const elementId = await this.elementCache.addElement(element)
-      if (elementId) {
+      // Check if element is relevant for caching
+      if (this.isRelevantElement(element)) {
+        // Add to cache
+        const elementId = await this.elementCache.addElement(element)
         this.observeElement(element)
         processedElements.add(element)
         
+        if (this.isDebugMode() && elementId) {
+          console.debug(`➕ DOM Monitor: Added element to DOM & cache`, {
+            elementId,
+            tag: element.tagName,
+            className: element.className,
+            id: element.id,
+            text: element.textContent?.substring(0, 50) || ''
+          })
+        }
+        
         // Process child elements
         const relevantChildren = element.querySelectorAll(
-          'button, a, input, select, textarea, [role="button"], [tabindex], [onclick]'
+          'button, a, input, select, textarea, form, [role="button"], [tabindex], [onclick], [data-testid]'
         )
         
         for (const child of relevantChildren) {
-          if (processedElements.has(child)) continue
-          
-          const childId = await this.elementCache.addElement(child)
-          if (childId) {
+          if (!processedElements.has(child)) {
+            const childId = await this.elementCache.addElement(child)
             this.observeElement(child)
             processedElements.add(child)
+            
+            if (this.isDebugMode() && childId) {
+              console.debug(`➕ DOM Monitor: Added child element`, {
+                elementId: childId,
+                tag: child.tagName,
+                className: child.className,
+                text: child.textContent?.substring(0, 30) || ''
+              })
+            }
           }
         }
       }
@@ -252,54 +301,71 @@
       
       // Remove from cache
       const elementId = this.generateElementId(element)
-      this.elementCache.removeElement(elementId)
+      const wasRemoved = this.elementCache.removeElement(elementId)
       this.unobserveElement(element)
       processedElements.add(element)
+      
+      if (this.isDebugMode() && wasRemoved) {
+        console.debug(`➖ DOM Monitor: Removed element from DOM & cache`, {
+          elementId,
+          tag: element.tagName,
+          className: element.className,
+          id: element.id,
+          text: element.textContent?.substring(0, 50) || ''
+        })
+      }
       
       // Process child elements
       const allChildren = element.querySelectorAll('*')
       for (const child of allChildren) {
         const childId = this.generateElementId(child)
-        this.elementCache.removeElement(childId)
+        const childWasRemoved = this.elementCache.removeElement(childId)
         this.unobserveElement(child)
         processedElements.add(child)
-      }
-    }
-
-    async handleAttributeMutation(target, attributeName, processedElements) {
-      if (processedElements.has(target)) return
-      
-      const isRelevantAttribute = [
-        'class', 'style', 'hidden', 'disabled', 'readonly',
-        'aria-label', 'aria-hidden', 'data-testid', 'id'
-      ].includes(attributeName)
-      
-      if (isRelevantAttribute) {
-        const elementId = this.generateElementId(target)
-        const cachedElement = this.elementCache.cache.get(elementId)
         
-        if (cachedElement) {
-          // Update element data
-          cachedElement.updateBasicData()
-          this.elementCache.updateAccessCount(elementId)
-          processedElements.add(target)
-          
-          // If visibility changed, update intersection observer
-          if (attributeName === 'hidden' || attributeName === 'style') {
-            this.updateVisibilityObservation(target)
-          }
+        if (this.isDebugMode() && childWasRemoved) {
+          console.debug(`➖ DOM Monitor: Removed child element`, {
+            elementId: childId,
+            tag: child.tagName,
+            className: child.className,
+            text: child.textContent?.substring(0, 30) || ''
+          })
         }
       }
     }
 
-    // Handle visibility changes
+    async handleAttributeMutation(element, attributeName, processedElements) {
+      if (processedElements.has(element)) return
+      
+      const elementId = this.generateElementId(element)
+      const oldValue = this.elementCache.cache.get(elementId)?.basicData?.attributes?.[attributeName]
+      const newValue = element.getAttribute(attributeName)
+      
+      // Update element in cache (addElement handles both add and update)
+      await this.elementCache.addElement(element)
+      processedElements.add(element)
+      
+      if (this.isDebugMode()) {
+        console.debug(`🔄 DOM Monitor: Attribute changed`, {
+          elementId,
+          tag: element.tagName,
+          className: element.className,
+          attribute: attributeName,
+          oldValue,
+          newValue,
+          text: element.textContent?.substring(0, 30) || ''
+        })
+      }
+    }
+
+    // Handle intersection changes with batching
     handleIntersectionChanges(entries) {
       const visibilityChanges = []
       
       for (const entry of entries) {
         const element = entry.target
         const elementId = this.generateElementId(element)
-        const isVisible = entry.isIntersecting && entry.intersectionRatio > 0
+        const isVisible = entry.intersectionRatio > 0
         
         const previousVisibility = this.visibilityMap.get(elementId)
         if (previousVisibility !== isVisible) {
@@ -309,8 +375,21 @@
             element,
             isVisible,
             intersectionRatio: entry.intersectionRatio,
-            boundingBox: entry.boundingClientRect
+            boundingBox: entry.boundingClientRect,
+            wasVisible: previousVisibility
           })
+          
+          if (this.isDebugMode()) {
+            console.debug(`👁️ DOM Monitor: Visibility changed`, {
+              elementId,
+              tag: element.tagName,
+              className: element.className,
+              isVisible,
+              wasVisible: previousVisibility,
+              intersectionRatio: entry.intersectionRatio.toFixed(2),
+              text: element.textContent?.substring(0, 30) || ''
+            })
+          }
         }
       }
       
@@ -390,6 +469,17 @@
             newSize,
             previousSize
           })
+          
+          if (this.isDebugMode()) {
+            console.debug(`📐 DOM Monitor: Size changed`, {
+              elementId,
+              tag: element.tagName,
+              className: element.className,
+              newSize: `${newSize.width}x${newSize.height}`,
+              previousSize: previousSize ? `${previousSize.width}x${previousSize.height}` : 'unknown',
+              text: element.textContent?.substring(0, 30) || ''
+            })
+          }
         }
       }
       

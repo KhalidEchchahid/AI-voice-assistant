@@ -479,7 +479,7 @@
 
     removeElement(elementId) {
       const data = this.cache.get(elementId)
-      if (!data) return
+      if (!data) return false
       
       if (this.isDebug()) {
         console.debug("📦 DOM Monitor: Cache REMOVE", { elementId, tag: data.basicData?.tagName, text: data.basicData?.text })
@@ -493,6 +493,8 @@
       // Remove from indexes
       this.removeFromSearchIndexes(elementId, data)
       this.updateStatsAfterRemoval(data)
+      
+      return true
     }
 
     removeFromSearchIndexes(elementId, elementData) {
