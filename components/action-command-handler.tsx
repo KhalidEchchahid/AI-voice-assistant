@@ -770,7 +770,7 @@ export default function ActionCommandHandler() {
     return (
       <button
         onClick={() => setIsDebugVisible(true)}
-        className="fixed hidden top-1/2 left-4 -translate-y-1/2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-full w-12 h-12 flex items-center justify-center cursor-pointer z-[99999] shadow-2xl shadow-violet-500/25 transition-all duration-300 hover:scale-110 animate-pulse"
+        className="fixed top-1/2 left-4 -translate-y-1/2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-full w-12 h-12 flex items-center justify-center cursor-pointer z-[99999] shadow-2xl shadow-violet-500/25 transition-all duration-300 hover:scale-110 animate-pulse"
         title="Show LiveKit Debug Panel"
       >
         <Bug className="w-5 h-5" />
