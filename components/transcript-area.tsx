@@ -13,7 +13,6 @@ import {
   Camera,
   CameraOff,
   Loader2,
-  Volume2,
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -72,7 +71,8 @@ export default function TranscriptArea({
 
   // Inline Status Component for transcript
   const InlineStatus = ({ state }: { state: string }) => {
-    if (state !== "processing" && state !== "speaking") return null
+    // Only show thinking status, not responding
+    if (state !== "processing") return null
 
     const getStatusConfig = () => {
       switch (state) {
@@ -83,14 +83,6 @@ export default function TranscriptArea({
             color: "text-amber-400",
             bgColor: "bg-amber-500/10",
             borderColor: "border-amber-500/20",
-          }
-        case "speaking":
-          return {
-            text: "Responding...",
-            icon: <Volume2 className="w-3 h-3 animate-pulse" />,
-            color: "text-violet-400",
-            bgColor: "bg-violet-500/10",
-            borderColor: "border-violet-500/20",
           }
         default:
           return null

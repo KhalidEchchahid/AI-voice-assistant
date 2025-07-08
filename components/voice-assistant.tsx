@@ -157,6 +157,7 @@ function VoiceAssistantInner({
 
   const isConnected = connectionState === ConnectionState.Connected
   const isCameraActive = localCameraTrack !== undefined
+  const isLoading = connectionState === ConnectionState.Connecting
 
   // Handle text message sending (placeholder for now)
   const handleSendMessage = useCallback((message: string) => {
@@ -194,8 +195,10 @@ function VoiceAssistantInner({
           showTranscript={showTranscript}
           onToggleView={() => setShowTranscript(!showTranscript)}
           isConnected={isConnected}
-          isLoading={false}
+          isLoading={isLoading}
           isCameraEnabled={isCameraActive}
+          onConnect={() => {}}
+          onDisconnect={() => {}}
           onCameraToggle={onCameraToggle}
           currentState={currentState}
         />
