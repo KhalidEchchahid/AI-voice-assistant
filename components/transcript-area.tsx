@@ -2,7 +2,19 @@
 
 import { useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
-import { Bot, User, Sparkles, MessageSquare, UserCircle } from "lucide-react"
+import {
+  Bot,
+  User,
+  Sparkles,
+  MessageSquare,
+  UserCircle,
+  Phone,
+  PhoneOff,
+  Camera,
+  CameraOff,
+  Loader2,
+  Volume2,
+} from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 // Define the Message type here since we're not importing it
@@ -17,9 +29,28 @@ interface TranscriptAreaProps {
   messages: Message[]
   showTranscript: boolean
   onToggleView: () => void
+  // New props for header controls
+  isConnected?: boolean
+  isLoading?: boolean
+  isCameraEnabled?: boolean
+  onConnect?: () => void
+  onDisconnect?: () => void
+  onCameraToggle?: () => void
+  currentState?: "idle" | "listening" | "processing" | "speaking" | "connecting"
 }
 
-export default function TranscriptArea({ messages, showTranscript, onToggleView }: TranscriptAreaProps) {
+export default function TranscriptArea({
+  messages,
+  showTranscript,
+  onToggleView,
+  isConnected = false,
+  isLoading = false,
+  isCameraEnabled = false,
+  onConnect,
+  onDisconnect,
+  onCameraToggle,
+  currentState = "idle",
+}: TranscriptAreaProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -38,6 +69,57 @@ export default function TranscriptArea({ messages, showTranscript, onToggleView 
       })
     }
   }, [messages, showTranscript])
+
+  // Inline Status Component for transcript
+  const InlineStatus = ({ state }: { state: string }) => {
+    if (state !== "processing" && state !== "speaking") return null
+
+    const getStatusConfig = () => {
+      switch (state) {
+        case "processing":
+          return {
+            text: "Thinking...",
+            icon: <Loader2 className="w-3 h-3 animate-spin" />,
+            color: "text-amber-400",
+            bgColor: "bg-amber-500/10",
+            borderColor: "border-amber-500/20",
+          }
+        case "speaking":
+          return {
+            text: "Responding...",
+            icon: <Volume2 className="w-3 h-3 animate-pulse" />,
+            color: "text-violet-400",
+            bgColor: "bg-violet-500/10",
+            borderColor: "border-violet-500/20",
+          }
+        default:
+          return null
+      }
+    }
+
+    const config = getStatusConfig()
+    if (!config) return null
+
+    return (
+      <div className="flex items-start space-x-4 animate-in slide-in-from-bottom-2 duration-300 mb-6">
+        {/* AI Avatar */}
+        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg relative bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/25">
+          <Bot className="w-5 h-5 text-white" />
+          <div className="absolute inset-0 rounded-full bg-white/20 animate-pulse" />
+        </div>
+
+        {/* Status bubble */}
+        <div
+          className={`rounded-2xl px-4 py-3 relative backdrop-blur-sm border rounded-tl-md ${config.bgColor} ${config.borderColor}`}
+        >
+          <div className="flex items-center gap-2">
+            <div className={config.color}>{config.icon}</div>
+            <p className={`text-sm font-medium ${config.color}`}>{config.text}</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const EmptyState = () => (
     <div className="flex-1 flex items-center justify-center p-8 relative">
@@ -73,11 +155,11 @@ export default function TranscriptArea({ messages, showTranscript, onToggleView 
           <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-violet-400 animate-bounce" />
         </div>
         <h3 className="text-2xl font-bold bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent mb-3">
-          {showTranscript ? "AI Voice Assistant" : "Avatar Mode"}
+          {showTranscript ? "Start a conversation" : "Avatar Mode"}
         </h3>
         <p className="text-sm text-muted-foreground/80 max-w-md mx-auto leading-relaxed">
           {showTranscript
-            ? "Connect to the agent and start speaking to see your conversation here. Experience the future of AI communication."
+            ? "Connect to the agent or type a message to begin your AI-powered conversation."
             : "Avatar mode coming soon! Switch back to transcript to see your conversation."}
         </p>
       </div>
@@ -86,61 +168,108 @@ export default function TranscriptArea({ messages, showTranscript, onToggleView 
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Compact Chat Header */}
-      <div className="p-3 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative overflow-hidden">
-        {/* Animated background pattern */}
-        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 via-transparent to-cyan-500/5" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
+      {/* Modern Elegant Header */}
+      <div className="px-6 py-4 bg-gradient-to-r from-background/98 via-background/95 to-background/98 backdrop-blur-xl border-b border-border/50 relative overflow-hidden">
+        {/* Subtle animated background */}
+        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/3 via-transparent to-cyan-500/3" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(120,119,198,0.08),transparent_70%)]" />
 
         <div className="flex items-center justify-between relative z-10">
-          <div className="flex items-center space-x-3">
+          {/* Left side - Company Logo */}
+          <div className="flex items-center space-x-4">
             <div className="relative">
-              <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-violet-500/25">
-                <Bot className="w-4 h-4 text-white" />
+              <div className="w-10 h-10 bg-gradient-to-br from-gray-900 to-gray-800 dark:from-white dark:to-gray-100 rounded-xl flex items-center justify-center shadow-lg">
+                <span className="text-white dark:text-gray-900 font-bold text-lg">X</span>
               </div>
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-400/30 to-purple-500/30 animate-pulse" />
-              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background animate-pulse" />
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20 animate-pulse opacity-50" />
             </div>
-            <div>
-              <h2 className="font-semibold text-foreground text-sm">AI Voice Assistant</h2>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                Live conversation
+            <div className="hidden sm:block">
+              <h1 className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                AI Assistant
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                {isConnected ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    Connected
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
+                    Disconnected
+                  </span>
+                )}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
-            {/* Modern Toggle Switch */}
-            <div className="flex items-center space-x-2">
-              <MessageSquare
-                className={cn(
-                  "w-4 h-4 transition-colors",
-                  showTranscript ? "text-violet-400" : "text-muted-foreground",
-                )}
-              />
-              <button
-                onClick={onToggleView}
-                className={cn(
-                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2",
-                  showTranscript ? "bg-violet-600" : "bg-gray-600",
-                )}
-              >
-                <span
-                  className={cn(
-                    "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                    showTranscript ? "translate-x-6" : "translate-x-1",
-                  )}
-                />
-              </button>
-              <UserCircle
-                className={cn(
-                  "w-4 h-4 transition-colors",
-                  !showTranscript ? "text-violet-400" : "text-muted-foreground",
-                )}
-              />
-            </div>
+          {/* Center - View Toggle */}
+          <div className="flex items-center space-x-2 bg-muted/50 rounded-full p-1 border border-border/50">
+            <button
+              onClick={() => onToggleView()}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
+                showTranscript
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <MessageSquare className="w-3 h-3" />
+              <span className="hidden sm:inline">Chat</span>
+            </button>
+            <button
+              onClick={() => onToggleView()}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
+                !showTranscript
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <UserCircle className="w-3 h-3" />
+              <span className="hidden sm:inline">Avatar</span>
+            </button>
+          </div>
 
+          {/* Right side - Controls */}
+          <div className="flex items-center space-x-2">
+            {/* Camera Button */}
+            <button
+              onClick={onCameraToggle}
+              className={cn(
+                "relative w-9 h-9 rounded-full transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 border",
+                isCameraEnabled
+                  ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white border-blue-500/20 shadow-blue-500/25"
+                  : "bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border",
+              )}
+              title={isCameraEnabled ? "Turn off camera" : "Turn on camera"}
+            >
+              {isCameraEnabled ? <Camera className="w-4 h-4 mx-auto" /> : <CameraOff className="w-4 h-4 mx-auto" />}
+            </button>
+
+            {/* Call Button */}
+            <button
+              onClick={isConnected ? onDisconnect : onConnect}
+              disabled={isLoading}
+              className={cn(
+                "relative w-9 h-9 rounded-full transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 border disabled:transform-none disabled:hover:scale-100",
+                isConnected
+                  ? "bg-gradient-to-br from-red-500 to-pink-500 text-white border-red-500/20 shadow-red-500/25 hover:from-red-600 hover:to-pink-600"
+                  : "bg-gradient-to-br from-emerald-500 to-teal-500 text-white border-emerald-500/20 shadow-emerald-500/25 hover:from-emerald-600 hover:to-teal-600",
+                isLoading && "from-gray-500 to-gray-600 border-gray-500/20",
+              )}
+              title={isConnected ? "Disconnect" : "Connect"}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 mx-auto animate-spin" />
+              ) : isConnected ? (
+                <PhoneOff className="w-4 h-4 mx-auto" />
+              ) : (
+                <Phone className="w-4 h-4 mx-auto" />
+              )}
+            </button>
+
+            {/* Theme Toggle */}
             <ThemeToggle />
           </div>
         </div>
@@ -165,7 +294,7 @@ export default function TranscriptArea({ messages, showTranscript, onToggleView 
             </h3>
             <p className="text-lg text-muted-foreground/80 max-w-md mx-auto leading-relaxed mb-6">Coming Soon</p>
             <p className="text-sm text-muted-foreground/60 max-w-lg mx-auto leading-relaxed">
-              Experience immersive AI conversations with a 3D avatar. Switch back to transcript mode to see your current
+              Experience immersive AI conversations with a 3D avatar. Switch back to chat mode to see your current
               conversation.
             </p>
           </div>
@@ -252,6 +381,10 @@ export default function TranscriptArea({ messages, showTranscript, onToggleView 
               </div>
             </div>
           ))}
+
+          {/* Inline Status Display */}
+          <InlineStatus state={currentState} />
+
           <div ref={messagesEndRef} />
         </div>
       )}

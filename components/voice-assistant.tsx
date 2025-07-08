@@ -14,9 +14,9 @@ import {
   VideoTrack,
 } from "@livekit/components-react"
 import { ConnectionState, Track, type TranscriptionSegment, LocalParticipant, type Participant } from "livekit-client"
-import StatusDisplay from "@/components/status-display"
 import TranscriptArea from "@/components/transcript-area"
-import { Phone, PhoneOff, Loader2, Camera, CameraOff, AlertCircle, Sparkles } from "lucide-react"
+import ChatInput from "@/components/chat-input"
+import { AlertCircle, Sparkles } from "lucide-react"
 import type { Message } from "@/components/transcript-area"
 import ActionCommandHandler from "@/components/action-command-handler"
 
@@ -143,19 +143,6 @@ function VoiceAssistantInner({
     voiceAssistant.audioTrack,
   ])
 
-  // Log transcript activity
-  useEffect(() => {
-    console.log("VoiceAssistant: Agent messages:", agentMessages.segments)
-  }, [agentMessages.segments])
-
-  useEffect(() => {
-    console.log("VoiceAssistant: Local messages:", localMessages.segments)
-  }, [localMessages.segments])
-
-  useEffect(() => {
-    console.log("VoiceAssistant: Chat messages:", chatMessages)
-  }, [chatMessages])
-
   // Determine current state
   const currentState = useMemo(() => {
     if (connectionState === ConnectionState.Connecting) return "connecting"
@@ -168,20 +155,20 @@ function VoiceAssistantInner({
     return "idle"
   }, [connectionState, voiceAssistant.state])
 
-  // Debug agent connection issues
-  useEffect(() => {
-    console.log("Voice Assistant Debug:", {
-      connectionState,
-      agentConnected: voiceAssistant.agent !== undefined,
-      audioTrackExists: voiceAssistant.audioTrack !== undefined,
-      voiceAssistantState: voiceAssistant.state,
-      currentState,
-    })
-  }, [connectionState, voiceAssistant.agent, voiceAssistant.audioTrack, voiceAssistant.state, currentState])
-
   const isConnected = connectionState === ConnectionState.Connected
-  const isAgentConnected = voiceAssistant.agent !== undefined && voiceAssistant.audioTrack !== undefined
   const isCameraActive = localCameraTrack !== undefined
+
+  // Handle text message sending (placeholder for now)
+  const handleSendMessage = useCallback((message: string) => {
+    console.log("Sending text message:", message)
+    // TODO: Implement text message sending via LiveKit
+  }, [])
+
+  // Handle voice toggle (placeholder for now)
+  const handleVoiceToggle = useCallback(() => {
+    console.log("Voice toggle clicked")
+    // TODO: Implement voice recording toggle
+  }, [])
 
   return (
     <>
@@ -194,39 +181,34 @@ function VoiceAssistantInner({
         </div>
       )}
 
-      {/* Chat Area - Takes most of the space - FIXED POSITIONING */}
+      {/* Main Chat Interface */}
       <div
         className="flex-1 flex flex-col min-h-0 relative z-10"
         style={{
           contain: "layout style",
-          willChange: "auto", // Remove will-change to prevent unnecessary repaints
+          willChange: "auto",
         }}
       >
         <TranscriptArea
           messages={messages}
           showTranscript={showTranscript}
           onToggleView={() => setShowTranscript(!showTranscript)}
+          isConnected={isConnected}
+          isLoading={false}
+          isCameraEnabled={isCameraActive}
+          onCameraToggle={onCameraToggle}
+          currentState={currentState}
+        />
+
+        {/* Chat Input Area */}
+        <ChatInput
+          onSendMessage={handleSendMessage}
+          onVoiceToggle={handleVoiceToggle}
+          isVoiceActive={currentState === "listening"}
+          isConnected={isConnected}
+          disabled={false}
         />
       </div>
-
-      {/* Minimal Status Area - Only shows when processing/speaking - STABLE POSITIONING */}
-      {(currentState === "processing" || currentState === "speaking") && (
-        <div
-          className="p-3 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative z-10 overflow-hidden"
-          style={{
-            contain: "layout",
-            minHeight: "60px", // Fixed height to prevent layout shifts
-          }}
-        >
-          {/* Animated background */}
-          <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 via-transparent to-cyan-500/5" />
-
-          <div className="flex flex-col items-center space-y-2 relative z-10">
-            {/* Status Display - Only for processing/speaking */}
-            <StatusDisplay state={currentState as any} transcript="" visionActive={false} />
-          </div>
-        </div>
-      )}
     </>
   )
 }
@@ -364,7 +346,6 @@ export default function VoiceAssistant() {
       const errorMessage = err instanceof Error ? err.message : "Failed to connect"
       setError(errorMessage)
       setShouldConnect(false)
-      // REMOVED RETRY LOGIC - User must manually retry
     }
   }, [generateToken, shouldConnect, lastConnectionAttempt, clearReconnectTimeout])
 
@@ -403,7 +384,6 @@ export default function VoiceAssistant() {
           break
 
         case ConnectionState.Disconnected:
-          // REMOVED AUTO-RETRY LOOP - Let user manually retry
           console.log("🔄 Disconnected - manual reconnection required")
           break
 
@@ -492,10 +472,10 @@ export default function VoiceAssistant() {
             </div>
 
             <h3 className="text-3xl font-bold bg-gradient-to-r from-violet-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent mb-4">
-              AI Voice Assistant
+              AI Assistant
             </h3>
             <p className="text-muted-foreground mb-8 leading-relaxed">
-              Connect to start your conversation with the future of AI communication
+              Connect to start your conversation with advanced AI
             </p>
 
             <div className="flex flex-col items-center space-y-4">
@@ -503,19 +483,22 @@ export default function VoiceAssistant() {
               <button
                 onClick={handleConnect}
                 disabled={isLoading}
-                className="group relative w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-500 shadow-2xl shadow-emerald-500/25 hover:shadow-emerald-500/40 transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
+                className="group relative px-8 py-4 rounded-2xl bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-500 shadow-2xl shadow-emerald-500/25 hover:shadow-emerald-500/40 transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 text-white font-medium"
               >
-                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
-                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-transparent to-black/10" />
-                <div className="relative z-10 flex items-center justify-center h-full">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
+                <div className="relative z-10 flex items-center space-x-2">
                   {isLoading ? (
-                    <Loader2 className="h-8 w-8 text-white animate-spin" />
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Connecting...</span>
+                    </>
                   ) : (
-                    <Phone className="h-8 w-8 text-white group-hover:scale-110 transition-transform duration-300" />
+                    <>
+                      <Sparkles className="w-5 h-5" />
+                      <span>Connect to AI</span>
+                    </>
                   )}
                 </div>
-                {/* Ripple effect */}
-                <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping opacity-0 group-hover:opacity-100" />
               </button>
 
               {error && (
@@ -525,34 +508,14 @@ export default function VoiceAssistant() {
                     <span className="font-medium">Connection Error</span>
                   </div>
                   <div className="text-center leading-relaxed">{error}</div>
-                  {retryCount > 0 && <div className="text-red-300 mt-2 text-xs">Retry {retryCount}/3...</div>}
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Repositioned Floating Buttons - Bottom Right */}
-        <div className="absolute z-30 bottom-4 right-4 flex space-x-2">
-          {/* Camera Button */}
-          <button
-            onClick={toggleCamera}
-            className={`group relative w-12 h-12 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 ${
-              isCameraEnabled
-                ? "bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 shadow-blue-500/25 hover:shadow-blue-500/40"
-                : "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800 shadow-gray-500/25 hover:shadow-gray-500/40"
-            }`}
-          >
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
-            <div className="relative z-10 flex items-center justify-center h-full">
-              {isCameraEnabled ? (
-                <Camera className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
-              ) : (
-                <CameraOff className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
-              )}
-            </div>
-          </button>
-        </div>
+        {/* Chat Input Preview (disabled) */}
+        <ChatInput disabled={true} isConnected={false} />
       </div>
     )
   }
@@ -587,59 +550,32 @@ export default function VoiceAssistant() {
           </div>
         )}
 
-        {/* Chat Area with preserved messages */}
+        {/* Chat Interface with preserved messages */}
         <div className="flex-1 flex flex-col min-h-0 relative z-10">
-          <TranscriptArea messages={persistedMessages} showTranscript={true} onToggleView={() => {}} />
-        </div>
+          <TranscriptArea
+            messages={persistedMessages}
+            showTranscript={true}
+            onToggleView={() => {}}
+            isConnected={false}
+            isLoading={isLoading}
+            isCameraEnabled={isCameraEnabled}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+            onCameraToggle={toggleCamera}
+            currentState="idle"
+          />
 
-        {/* Repositioned Floating Action Buttons - Bottom Right */}
-        <div className="absolute z-30 bottom-4 right-4 flex space-x-2">
-          {/* Camera Button */}
-          <button
-            onClick={toggleCamera}
-            className={`group relative w-12 h-12 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 ${
-              isCameraEnabled
-                ? "bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 shadow-blue-500/25 hover:shadow-blue-500/40"
-                : "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800 shadow-gray-500/25 hover:shadow-gray-500/40"
-            }`}
-          >
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
-            <div className="relative z-10 flex items-center justify-center h-full">
-              {isCameraEnabled ? (
-                <Camera className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
-              ) : (
-                <CameraOff className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
-              )}
-            </div>
-          </button>
-
-          {/* Call Button */}
-          <button
-            onClick={handleConnect}
-            disabled={isLoading}
-            className="group relative w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 disabled:from-gray-600 disabled:to-gray-700 transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
-          >
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
-            <div className="relative z-10 flex items-center justify-center h-full">
-              {isLoading ? (
-                <Loader2 className="h-6 w-6 text-white animate-spin" />
-              ) : (
-                <Phone className="h-6 w-6 text-white group-hover:scale-110 transition-transform duration-300" />
-              )}
-            </div>
-            <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping opacity-0 group-hover:opacity-100" />
-          </button>
+          <ChatInput disabled={true} isConnected={false} />
         </div>
 
         {error && (
-          <div className="absolute bottom-20 left-4 max-w-xs z-40">
+          <div className="absolute bottom-24 left-4 max-w-xs z-40">
             <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-lg backdrop-blur-sm">
               <div className="flex items-center mb-2">
                 <AlertCircle className="h-4 w-4 mr-2" />
                 <span className="font-medium">Error</span>
               </div>
               <div className="leading-relaxed">{error}</div>
-              {retryCount > 0 && <div className="text-red-300 mt-2">Retrying... ({retryCount}/3)</div>}
             </div>
           </div>
         )}
@@ -702,63 +638,15 @@ export default function VoiceAssistant() {
           onConnectionStateChange={handleConnectionStateChange}
         />
 
-        {/* Repositioned Floating Action Buttons - Bottom Right */}
-        <div className="absolute z-30 bottom-4 right-4 flex space-x-2">
-          {/* Camera Button - only show when connected */}
-          {shouldConnect && connectionState === ConnectionState.Connected && (
-            <button
-              onClick={toggleCamera}
-              className={`group relative w-12 h-12 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 ${
-                isCameraEnabled
-                  ? "bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 shadow-blue-500/25 hover:shadow-blue-500/40"
-                  : "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800 shadow-gray-500/25 hover:shadow-gray-500/40"
-              }`}
-            >
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
-              <div className="relative z-10 flex items-center justify-center h-full">
-                {isCameraEnabled ? (
-                  <Camera className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
-                ) : (
-                  <CameraOff className="h-5 w-5 text-white group-hover:scale-110 transition-transform duration-300" />
-                )}
-              </div>
-            </button>
-          )}
-
-          {/* Call Button */}
-          <button
-            onClick={shouldConnect ? handleDisconnect : handleConnect}
-            disabled={isLoading}
-            className={`group relative w-14 h-14 rounded-full transition-all duration-500 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 ${
-              shouldConnect
-                ? "bg-gradient-to-br from-red-500 via-pink-500 to-rose-500 hover:from-red-600 hover:via-pink-600 hover:to-rose-600 shadow-red-500/25 hover:shadow-red-500/40"
-                : "bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 shadow-emerald-500/25 hover:shadow-emerald-500/40"
-            } ${isLoading ? "from-gray-600 to-gray-700 shadow-gray-500/25" : ""}`}
-          >
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent animate-pulse group-hover:animate-none" />
-            <div className="relative z-10 flex items-center justify-center h-full">
-              {isLoading ? (
-                <Loader2 className="h-6 w-6 text-white animate-spin" />
-              ) : shouldConnect ? (
-                <PhoneOff className="h-6 w-6 text-white group-hover:scale-110 transition-transform duration-300" />
-              ) : (
-                <Phone className="h-6 w-6 text-white group-hover:scale-110 transition-transform duration-300" />
-              )}
-            </div>
-            <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping opacity-0 group-hover:opacity-100" />
-          </button>
-        </div>
-
         {/* Enhanced Error Display */}
         {error && shouldConnect && (
-          <div className="absolute bottom-20 left-4 max-w-xs z-40">
+          <div className="absolute bottom-24 left-4 max-w-xs z-40">
             <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-lg backdrop-blur-sm shadow-xl">
               <div className="flex items-center mb-2">
                 <AlertCircle className="h-4 w-4 mr-2" />
                 <span className="font-medium">Connection Error</span>
               </div>
               <div className="leading-relaxed">{error}</div>
-              {retryCount > 0 && <div className="text-red-300 mt-2">Retrying... ({retryCount}/3)</div>}
             </div>
           </div>
         )}
