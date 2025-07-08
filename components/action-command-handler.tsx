@@ -106,6 +106,7 @@ export default function ActionCommandHandler() {
   const [isDebugVisible, setIsDebugVisible] = useState(true)
   const [isMinimized, setIsMinimized] = useState(false)
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useState<number | null>(null)
+  const [isInActiveConversation, setIsInActiveConversation] = useState(false)
 
   const addError = (error: string) => {
     console.error("ActionCommandHandler Error:", error)
@@ -371,10 +372,24 @@ export default function ActionCommandHandler() {
           timestamp: new Date().toISOString(),
         })
 
+        // Remove these lines that cause the widget to jump:
+        // setIsDebugVisible(true)
+        // setIsMinimized(false)
+
+        // Replace with just the message count increment:
         setMessageCount((prev) => prev + 1)
-        // DEMO MODE: Debug panel auto-show disabled for demo
-        setIsDebugVisible(true)
-        setIsMinimized(false)
+
+        // In the handleDataReceived function, add:
+        if (!isInActiveConversation) {
+          setIsInActiveConversation(true)
+          // Auto-hide after 10 seconds of no activity
+          setTimeout(() => setIsInActiveConversation(false), 10000)
+        }
+
+        // Only auto-show for the first message, not during active conversation:
+        if (messageCount === 0) {
+          setIsDebugVisible(true)
+        }
 
         // Decode following LiveKit documentation
         const textDecoder = new TextDecoder()
@@ -421,21 +436,6 @@ export default function ActionCommandHandler() {
         if (topic === "dom_monitor_requests" && parsedData?.type === "dom_monitor_request") {
           console.log("📥 DOM Monitor request from assistant via LiveKit:", parsedData)
           handleDOMMonitorRequest(parsedData)
-        }
-        // Handle test messages for debugging
-        else if (topic === "dom_monitor_requests" && parsedData?.type === "dom_monitor_test") {
-          console.log("🧪 DOM Monitor test message received:", parsedData)
-          // Send a test response back
-          sendDOMResponse({
-            type: "dom_monitor_response",
-            request_id: parsedData.test_id || "test_response",
-            success: true,
-            data: {
-              message: "Test connection successful!",
-              timestamp: Date.now()
-            },
-            timestamp: Date.now()
-          })
         }
         // Handle action execution commands
         else if (parsedData?.type === "execute_actions" && Array.isArray(parsedData.actions)) {
@@ -646,39 +646,9 @@ export default function ActionCommandHandler() {
       try {
         const data = event.data
 
-        // ENHANCED LOGGING: Log all window messages for debugging
-        if (data && (data.action === "dom_monitor_response" || data.type === "dom_monitor_response")) {
-          console.log("🎯 DOM MONITOR RESPONSE RECEIVED - Full Details:", {
-            source: event.origin,
-            timestamp: new Date().toISOString(),
-            data: data,
-            dataSize: JSON.stringify(data).length,
-            hasElements: !!data.data?.elements,
-            elementsCount: data.data?.elements?.length || 0,
-            success: data.success,
-            error: data.error
-          })
-
-          // Log individual elements if found
-          if (data.data?.elements && data.data.elements.length > 0) {
-            console.log("🔍 DOM MONITOR FOUND ELEMENTS:", data.data.elements.map((el: any, index: number) => ({
-              index: index + 1,
-              text: el.text?.slice(0, 50) + "...",
-              tag: el.tagName,
-              role: el.role,
-              visible: el.visibility,
-              interactable: el.interactable,
-              selectors: el.selectors?.map((s: any) => `${s.type}: ${s.value}`),
-              confidence: el.confidence
-            })))
-          } else {
-            console.log("❌ DOM MONITOR: No elements found or response failed")
-          }
-        }
-
         // Handle DOM Monitor response from parent window
         if (data && data.action === "dom_monitor_response") {
-          console.log("📥 Processing DOM Monitor response (action format):", data.requestId || data.request_id)
+          console.log("📥 Received DOM Monitor response from parent:", data)
 
           // Convert parent response to LiveKit format and send back to backend
           const livekitResponse: DOMMonitorResponseData = {
@@ -690,56 +660,28 @@ export default function ActionCommandHandler() {
             timestamp: Date.now(),
           }
 
-          console.log("📤 SENDING DOM RESPONSE TO BACKEND:", {
-            request_id: livekitResponse.request_id,
-            success: livekitResponse.success,
-            elements_count: livekitResponse.data?.elements?.length || 0,
-            response_size: JSON.stringify(livekitResponse).length
-          })
-
           sendDOMResponse(livekitResponse)
 
-          // Add to debug history with enhanced details
+          // Add to debug history
           addToHistory(
             {
               type: "dom_monitor_response_received",
               request_id: data.requestId || data.request_id,
               success: data.success,
               elements_found: data.data?.elements?.length || 0,
-              raw_response: data,
-              livekit_response: livekitResponse
             },
             "dom_monitor_response",
           )
         }
         // Handle legacy format for backward compatibility
         else if (data && data.type === "dom_monitor_response") {
-          console.log("📥 Processing DOM Monitor response (legacy format):", data.request_id)
-
-          console.log("📤 SENDING LEGACY DOM RESPONSE TO BACKEND:", {
-            request_id: data.request_id,
-            success: data.success,
-            elements_count: data.data?.elements?.length || 0,
-            response_size: JSON.stringify(data).length
-          })
+          console.log("📥 Received legacy DOM Monitor response from parent:", data)
 
           // Send response back to backend via LiveKit
           sendDOMResponse(data as DOMMonitorResponseData)
 
           // Add to debug history
-          addToHistory({
-            ...data,
-            response_type: "legacy_format"
-          }, "dom_monitor_response")
-        }
-        // Log all other window messages for debugging
-        else if (data && (data.action || data.type)) {
-          console.log("📨 Other window message received:", {
-            action: data.action,
-            type: data.type,
-            source: event.origin,
-            keys: Object.keys(data)
-          })
+          addToHistory(data, "dom_monitor_response")
         }
       } catch (error: any) {
         console.error("❌ Error handling window message:", error)
@@ -770,7 +712,13 @@ export default function ActionCommandHandler() {
     return (
       <button
         onClick={() => setIsDebugVisible(true)}
-        className="fixed top-1/2 left-4 -translate-y-1/2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-full w-12 h-12 flex items-center justify-center cursor-pointer z-[99999] shadow-2xl shadow-violet-500/25 transition-all duration-300 hover:scale-110 animate-pulse"
+        className="fixed top-4 left-4 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-full w-12 h-12 flex items-center justify-center cursor-pointer z-[99999] shadow-2xl shadow-violet-500/25 transition-all duration-300 hover:scale-110 transform translate3d(0,0,0) will-change-transform"
+        style={{
+          position: "fixed",
+          top: "16px",
+          left: "16px",
+          transform: "translate3d(0,0,0)",
+        }}
         title="Show LiveKit Debug Panel"
       >
         <Bug className="w-5 h-5" />
@@ -782,7 +730,13 @@ export default function ActionCommandHandler() {
     <div
       className={`fixed top-4 left-4 bg-gradient-to-br from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-xl text-white rounded-xl border border-violet-500/30 shadow-2xl shadow-violet-500/10 z-[99999] transition-all duration-300 ${
         isMinimized ? "max-h-16" : "max-h-[600px]"
-      } max-w-[500px] overflow-hidden`}
+      } max-w-[500px] overflow-hidden transform translate3d(0,0,0) will-change-transform`}
+      style={{
+        position: "fixed",
+        top: "16px",
+        left: "16px",
+        transform: "translate3d(0,0,0)",
+      }}
     >
       {/* Enhanced Header */}
       <div
