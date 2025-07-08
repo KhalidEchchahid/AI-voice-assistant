@@ -500,7 +500,7 @@
                 // Wait a moment for the scan to complete
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
-                const allElements = window.AIAssistantDOMMonitor.getAllElements({ 
+                const allElements = await window.AIAssistantDOMMonitor.getAllElements({ 
                     visible: true, 
                     interactable: true 
                 });
@@ -805,7 +805,8 @@
             logResult('element-results', '🔄 Testing Real-Time Updates...\n');
 
             try {
-                const initialCount = window.AIAssistantDOMMonitor.getAllElements().length;
+                const initialElements = await window.AIAssistantDOMMonitor.getAllElements();
+                const initialCount = initialElements.length;
                 logResult('element-results', `Initial element count: ${initialCount}`);
 
                 // Add new elements
@@ -820,7 +821,8 @@
                 // Wait a moment for detection
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
-                const newCount = window.AIAssistantDOMMonitor.getAllElements().length;
+                const newElements = await window.AIAssistantDOMMonitor.getAllElements();
+                const newCount = newElements.length;
                 logResult('element-results', `New element count: ${newCount}`);
                 logResult('element-results', `Elements added: ${newCount - initialCount}`);
 

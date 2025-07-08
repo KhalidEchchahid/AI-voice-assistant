@@ -663,14 +663,19 @@
         if (filter.role && data.basicData.role !== filter.role) continue
         if (filter.tag && data.basicData.tagName !== filter.tag) continue
         
+        // Safely serialize the data
+        const serializedData = typeof data.serialize === 'function' 
+          ? data.serialize() 
+          : data.basicData;
+        
         elements.push({
           elementId,
-          ...data.serialize(),
+          ...serializedData,
           confidence: Math.min(data.priority / 20, 1.0)
         })
       }
       
-      return elements.sort((a, b) => b.priority - a.priority)
+      return elements.sort((a, b) => (b.priority || 0) - (a.priority || 0))
     }
 
     clear() {

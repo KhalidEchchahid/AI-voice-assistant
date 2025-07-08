@@ -258,7 +258,7 @@
       // Check if element is relevant for caching
       if (this.isRelevantElement(element)) {
         // Add to cache
-        const elementId = await this.elementCache.addElement(element)
+      const elementId = await this.elementCache.addElement(element)
         this.observeElement(element)
         processedElements.add(element)
         
@@ -279,7 +279,7 @@
         
         for (const child of relevantChildren) {
           if (!processedElements.has(child)) {
-            const childId = await this.elementCache.addElement(child)
+          const childId = await this.elementCache.addElement(child)
             this.observeElement(child)
             processedElements.add(child)
             
@@ -388,7 +388,7 @@
               wasVisible: previousVisibility,
               intersectionRatio: entry.intersectionRatio.toFixed(2),
               text: element.textContent?.substring(0, 30) || ''
-            })
+          })
           }
         }
       }

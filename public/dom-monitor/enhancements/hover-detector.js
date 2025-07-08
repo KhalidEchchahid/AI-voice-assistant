@@ -385,11 +385,11 @@
 
     // Detect tooltip position
     detectTooltipPosition(element) {
-      const classes = element.className
+      const classes = element.className || ''
       const positions = ['top', 'bottom', 'left', 'right']
       
       for (const pos of positions) {
-        if (classes.includes(`tooltip-${pos}`) || classes.includes(`${pos}-tooltip`)) {
+        if (typeof classes === 'string' && (classes.includes(`tooltip-${pos}`) || classes.includes(`${pos}-tooltip`))) {
           return pos
         }
       }
@@ -502,11 +502,11 @@
 
     // Detect dropdown position
     detectDropdownPosition(element) {
-      const classes = element.className
+      const classes = element.className || ''
       const positions = ['dropdown', 'dropup', 'dropstart', 'dropend', 'dropleft', 'dropright']
       
       for (const pos of positions) {
-        if (classes.includes(pos)) return pos
+        if (typeof classes === 'string' && classes.includes(pos)) return pos
       }
       
       return 'dropdown' // Default

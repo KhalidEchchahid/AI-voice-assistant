@@ -64,10 +64,22 @@
     script.onload = () => {
       console.log(`AI Assistant Loader: DOM Monitor V2 script loaded successfully from ${monitorSrc}`)
       
-      // Add compatibility layer for missing methods after V2 loads
-      setTimeout(() => {
-        addDOMMonitorCompatibilityLayer()
-      }, 1000) // Wait for V2 to fully initialize
+      // Wait for DOMMonitor to be available before adding compatibility layer
+      let attempts = 0
+      const checkAndAddCompatibility = () => {
+        if (window.DOMMonitor || attempts > 50) {
+          if (window.DOMMonitor) {
+            console.log("AI Assistant Loader: DOMMonitor detected, adding compatibility layer")
+            addDOMMonitorCompatibilityLayer()
+          } else {
+            console.error("AI Assistant Loader: DOMMonitor not available after timeout")
+          }
+        } else {
+          attempts++
+          setTimeout(checkAndAddCompatibility, 100)
+        }
+      }
+      checkAndAddCompatibility()
     }
     script.onerror = () => {
       console.error(`AI Assistant Loader: Failed to load DOM Monitor V2 script from ${monitorSrc}`)
@@ -79,24 +91,30 @@
 
   // Add compatibility layer for API methods expected by existing code
   function addDOMMonitorCompatibilityLayer() {
-    if (window.AIAssistantDOMMonitor && !window.AIAssistantDOMMonitor.isReady) {
-      console.log("AI Assistant Loader: Adding DOM Monitor V2 compatibility layer")
-      
-      // Add missing isReady method
-      window.AIAssistantDOMMonitor.isReady = function() {
-        return window.DOMMonitor && window.DOMMonitor.isReady && window.DOMMonitor.isReady()
-      }
+    console.log("AI Assistant Loader: Setting up DOM Monitor V2 compatibility layer")
+    
+    // Create a completely new compatibility wrapper object
+    window.AIAssistantDOMMonitor = {
+      // Forward core DOMMonitor methods with proper binding and error handling
+      initialize: () => window.DOMMonitor?.initialize?.() || Promise.resolve(),
+      findElements: (intent, options) => window.DOMMonitor?.findElements?.(intent, options) || Promise.resolve([]),
+      getAllElements: (filter) => window.DOMMonitor?.getAllElements?.(filter) || Promise.resolve([]),
+      forceRescan: () => window.DOMMonitor?.forceRescan?.() || Promise.resolve({ success: false, error: "Not available" }),
+      getStats: () => window.DOMMonitor?.getStats?.() || { cache: { totalElements: 0 } },
+      updateConfig: (config) => window.DOMMonitor?.updateConfig?.(config) || { success: false },
+      isReady: () => window.DOMMonitor?.isReady?.() || false,
+      healthCheck: () => window.DOMMonitor?.healthCheck?.() || Promise.resolve({ isHealthy: false }),
       
       // Add missing refresh method (maps to forceRescan)
-      window.AIAssistantDOMMonitor.refresh = function() {
+      refresh: async function() {
         if (window.DOMMonitor && window.DOMMonitor.forceRescan) {
-          return window.DOMMonitor.forceRescan()
+          return await window.DOMMonitor.forceRescan()
         }
         return { success: false, error: "DOM Monitor not ready" }
-      }
+      },
       
       // Add missing getStatus method
-      window.AIAssistantDOMMonitor.getStatus = function() {
+      getStatus: function() {
         if (window.DOMMonitor) {
           return {
             isReady: window.DOMMonitor.isReady ? window.DOMMonitor.isReady() : false,
@@ -107,86 +125,49 @@
           }
         }
         return { isReady: false, isRunning: false, version: "unknown" }
-      }
-      
-      // Add getStats method (bridge to V2 getStats)
-      window.AIAssistantDOMMonitor.getStats = function() {
-        if (window.DOMMonitor && window.DOMMonitor.getStats) {
-          return window.DOMMonitor.getStats()
-        } else {
-          return {
-            version: "2.0.0",
-            isInitialized: false,
-            isRunning: false,
-            totalRequests: 0,
-            cache: { totalElements: 0, visibleElements: 0, interactableElements: 0 }
-          }
-        }
-      }
-      
-      // Add getAllElements method (bridge to V2 getAllElements)
-      window.AIAssistantDOMMonitor.getAllElements = function(filter = {}) {
-        if (window.DOMMonitor && window.DOMMonitor.getAllElements) {
-          return window.DOMMonitor.getAllElements(filter)
-        } else {
-          return []
-        }
-      }
-      
-      // Add findElements method (bridge to V2 findElements)
-      window.AIAssistantDOMMonitor.findElements = function(intent, options = {}) {
-        if (window.DOMMonitor && window.DOMMonitor.findElements) {
-          return window.DOMMonitor.findElements(intent, options)
-        } else {
-          return Promise.resolve([])
-        }
-      }
+      },
       
       // Add _internal access for advanced usage
-      if (!window.AIAssistantDOMMonitor._internal) {
-        window.AIAssistantDOMMonitor._internal = {
-          monitor: {
-            // Bridge the handleElementQuery method to V2's findByIntent
-            handleElementQuery: function(payload) {
-              const { intent, options = {} } = payload
-              
-              if (!window.DOMMonitor) {
-                return {
-                  success: false,
-                  error: "DOM Monitor not ready",
-                  timestamp: Date.now()
-                }
+      _internal: {
+        monitor: {
+          // Bridge the handleElementQuery method to V2's findElements
+          handleElementQuery: async function(payload) {
+            const { intent, options = {} } = payload
+            
+            if (!window.DOMMonitor) {
+              return {
+                success: false,
+                error: "DOM Monitor not ready",
+                timestamp: Date.now()
               }
-              
-              try {
-                const results = window.DOMMonitor.findElements(intent, options)
-                return Promise.resolve(results).then(elements => ({
-                  success: true,
-                  elements: elements || [],
-                  total: (elements || []).length,
-                  confidence: elements && elements.length > 0 ? 0.8 : 0,
-                  timestamp: Date.now(),
-                  stats: window.DOMMonitor.getStats()
-                }))
-              } catch (error) {
-                return {
-                  success: false,
-                  error: error.message,
-                  timestamp: Date.now()
-                }
+            }
+            
+            try {
+              const elements = await window.DOMMonitor.findElements(intent, options)
+              return {
+                success: true,
+                elements: elements || [],
+                total: (elements || []).length,
+                confidence: elements && elements.length > 0 ? 0.8 : 0,
+                timestamp: Date.now(),
+                stats: window.DOMMonitor.getStats()
               }
-            },
-            // Also expose the base DOMMonitor for other uses
-            ...window.DOMMonitor
-          },
-          get cache() { return window.DOMMonitor?.elementCache },
-          get observer() { return window.DOMMonitor?.domObserver },
-          get bridge() { return window.DOMMonitor?.communicationBridge }
-        }
+            } catch (error) {
+              return {
+                success: false,
+                error: error.message,
+                timestamp: Date.now()
+              }
+            }
+          }
+        },
+        get cache() { return window.DOMMonitor?.elementCache },
+        get observer() { return window.DOMMonitor?.domObserver },
+        get bridge() { return window.DOMMonitor?.communicationBridge }
       }
-      
-      console.log("✅ AI Assistant Loader: DOM Monitor V2 compatibility layer added")
     }
+    
+    console.log("✅ AI Assistant Loader: DOM Monitor V2 compatibility layer added")
   }
   
   // Fallback to old DOM monitor if V2 fails

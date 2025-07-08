@@ -144,8 +144,7 @@
         console.log("🔄 DOM Monitor: Starting initialization...")
         await window.DOMMonitor.initialize()
         
-        // For backward compatibility, also expose as AIAssistantDOMMonitor
-        window.AIAssistantDOMMonitor = window.DOMMonitor
+        // Note: AIAssistantDOMMonitor compatibility wrapper will be created by assistant-loader.js
       } else {
         throw new Error("DOM Monitor global instance not created")
       }

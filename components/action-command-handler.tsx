@@ -103,7 +103,7 @@ export default function ActionCommandHandler() {
   const [messageHistory, setMessageHistory] = useState<any[]>([])
   const [messageCount, setMessageCount] = useState(0)
   const [errors, setErrors] = useState<string[]>([])
-  const [isDebugVisible, setIsDebugVisible] = useState(false)
+  const [isDebugVisible, setIsDebugVisible] = useState(true)
   const [isMinimized, setIsMinimized] = useState(false)
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useState<number | null>(null)
 
@@ -373,8 +373,8 @@ export default function ActionCommandHandler() {
 
         setMessageCount((prev) => prev + 1)
         // DEMO MODE: Debug panel auto-show disabled for demo
-        // setIsDebugVisible(true)
-        // setIsMinimized(false)
+        setIsDebugVisible(true)
+        setIsMinimized(false)
 
         // Decode following LiveKit documentation
         const textDecoder = new TextDecoder()
