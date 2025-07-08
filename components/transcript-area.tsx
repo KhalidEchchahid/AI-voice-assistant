@@ -23,10 +23,19 @@ export default function TranscriptArea({ messages, showTranscript, onToggleView 
   const containerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom when messages change - FIXED VERSION
   useEffect(() => {
     if (messagesEndRef.current && showTranscript) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+      // Use requestAnimationFrame to prevent layout thrashing
+      requestAnimationFrame(() => {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({
+            behavior: "auto", // Changed from "smooth" to "auto" to prevent shake
+            block: "end",
+            inline: "nearest",
+          })
+        }
+      })
     }
   }, [messages, showTranscript])
 
@@ -168,6 +177,10 @@ export default function TranscriptArea({ messages, showTranscript, onToggleView 
         <div
           ref={containerRef}
           className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth bg-gradient-to-b from-background/50 to-background/80 backdrop-blur-sm relative custom-scrollbar"
+          style={{
+            scrollBehavior: "auto", // Override smooth scrolling
+            contain: "layout style", // Prevent layout shifts from affecting parent
+          }}
         >
           {/* Subtle background pattern */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(120,119,198,0.05),transparent_50%)] pointer-events-none" />

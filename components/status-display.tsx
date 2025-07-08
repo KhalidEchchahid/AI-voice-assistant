@@ -8,11 +8,6 @@ interface StatusDisplayProps {
 }
 
 const StatusDisplay: React.FC<StatusDisplayProps> = ({ state, transcript }) => {
-  // Only show status for processing and speaking states
-  if (state !== "processing" && state !== "speaking") {
-    return null
-  }
-
   const getStatusConfig = () => {
     switch (state) {
       case "processing":
@@ -32,18 +27,27 @@ const StatusDisplay: React.FC<StatusDisplayProps> = ({ state, transcript }) => {
           borderColor: "border-violet-500/30",
         }
       default:
-        return null
+        return {
+          text: "Ready...",
+          icon: <Volume2 className="w-4 h-4" />,
+          color: "text-gray-400",
+          bgColor: "bg-gray-500/10",
+          borderColor: "border-gray-500/30",
+        }
     }
   }
 
   const config = getStatusConfig()
-  if (!config) return null
 
   return (
     <div className="text-center">
-      {/* Compact status indicator */}
+      {/* Compact status indicator - ALWAYS RENDERED to prevent layout shifts */}
       <div
         className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-sm transition-all duration-300 ${config.bgColor} ${config.borderColor}`}
+        style={{
+          minWidth: "120px", // Fixed minimum width
+          minHeight: "32px", // Fixed minimum height
+        }}
       >
         <div className={config.color}>{config.icon}</div>
         <p className={`text-xs font-medium ${config.color}`}>{config.text}</p>

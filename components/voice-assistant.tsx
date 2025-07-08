@@ -187,15 +187,21 @@ function VoiceAssistantInner({
     <>
       {/* Enhanced Background Video */}
       {isCameraActive && localCameraTrack && (
-        <div className="absolute inset-0 z-0">
+        <div className="absolute inset-0 z-0" style={{ contain: "layout" }}>
           <VideoTrack trackRef={localCameraTrack} className="absolute inset-0 w-full h-full object-cover" />
           {/* Enhanced overlay with gradient */}
           <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 backdrop-blur-[1px]"></div>
         </div>
       )}
 
-      {/* Chat Area - Takes most of the space */}
-      <div className="flex-1 flex flex-col min-h-0 relative z-10">
+      {/* Chat Area - Takes most of the space - FIXED POSITIONING */}
+      <div
+        className="flex-1 flex flex-col min-h-0 relative z-10"
+        style={{
+          contain: "layout style",
+          willChange: "auto", // Remove will-change to prevent unnecessary repaints
+        }}
+      >
         <TranscriptArea
           messages={messages}
           showTranscript={showTranscript}
@@ -203,9 +209,15 @@ function VoiceAssistantInner({
         />
       </div>
 
-      {/* Minimal Status Area - Only shows when processing/speaking */}
+      {/* Minimal Status Area - Only shows when processing/speaking - STABLE POSITIONING */}
       {(currentState === "processing" || currentState === "speaking") && (
-        <div className="p-3 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative z-10 overflow-hidden">
+        <div
+          className="p-3 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl relative z-10 overflow-hidden"
+          style={{
+            contain: "layout",
+            minHeight: "60px", // Fixed height to prevent layout shifts
+          }}
+        >
           {/* Animated background */}
           <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 via-transparent to-cyan-500/5" />
 
@@ -228,7 +240,7 @@ export default function VoiceAssistant() {
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [hasEverConnected, setHasEverConnected] = useState<boolean>(false)
   const [persistedMessages, setPersistedMessages] = useState<Message[]>([])
-  const [isCameraEnabled, setIsCameraEnabled] = useState<boolean>(true)
+  const [isCameraEnabled, setIsCameraEnabled] = useState<boolean>(false)
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected)
   const [retryCount, setRetryCount] = useState<number>(0)
   const [lastConnectionAttempt, setLastConnectionAttempt] = useState<number>(0)
@@ -258,7 +270,7 @@ export default function VoiceAssistant() {
         setIsLoading(true)
         setError(null)
 
-        console.log("🔄 Generating LiveKit token with VISION support...", {
+        console.log("🔄 Generating LiveKit token...", {
           isRetry,
           retryCount,
           timestamp: Date.now(),
@@ -285,7 +297,7 @@ export default function VoiceAssistant() {
         const responseData = await response.json()
         const { token: newToken, wsUrl: newWsUrl } = responseData
 
-        console.log("✅ Token generated successfully with VISION capabilities", {
+        console.log("✅ Token generated successfully", {
           hasToken: !!newToken,
           hasWsUrl: !!newWsUrl,
           wsUrl: newWsUrl,
@@ -505,19 +517,6 @@ export default function VoiceAssistant() {
                 {/* Ripple effect */}
                 <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping opacity-0 group-hover:opacity-100" />
               </button>
-
-              {/* Vision Capabilities Info */}
-              <div className="text-center space-y-2 max-w-sm">
-                <div className="flex items-center justify-center space-x-2 text-sm text-muted-foreground">
-                  <span className="flex items-center space-x-1">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                    <span>Voice + Vision AI</span>
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground/80">
-                  I can see through your camera and help with real-world tasks
-                </p>
-              </div>
 
               {error && (
                 <div className="text-xs text-red-400 text-center max-w-xs p-4 bg-red-500/10 border border-red-500/20 rounded-lg backdrop-blur-sm">

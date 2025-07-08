@@ -68,9 +68,50 @@
   }
 }
 
+/* Add these rules to prevent layout shifts */
+.transcript-container {
+  contain: layout style;
+}
+
+.message-container {
+  contain: layout;
+}
+
+/* Prevent scroll-triggered repaints */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, 0.3) transparent;
+  contain: layout;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, rgba(139, 92, 246, 0.4), rgba(168, 85, 247, 0.4));
+  border-radius: 4px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, rgba(139, 92, 246, 0.6), rgba(168, 85, 247, 0.6));
+}
+
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Prevent animation-induced layout shifts */
 @layer utilities {
   .animate-float {
     animation: float 3s ease-in-out infinite;
+    contain: layout;
   }
 
   @keyframes float {
@@ -85,6 +126,7 @@
 
   .animate-glow {
     animation: glow 2s ease-in-out infinite alternate;
+    contain: layout;
   }
 
   @keyframes glow {
@@ -94,34 +136,5 @@
     to {
       box-shadow: 0 0 30px rgba(139, 92, 246, 0.6);
     }
-  }
-
-  /* Custom Scrollbar Styles */
-  .custom-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(139, 92, 246, 0.3) transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-    border-radius: 4px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: linear-gradient(to bottom, rgba(139, 92, 246, 0.4), rgba(168, 85, 247, 0.4));
-    border-radius: 4px;
-    border: 1px solid rgba(139, 92, 246, 0.2);
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(to bottom, rgba(139, 92, 246, 0.6), rgba(168, 85, 247, 0.6));
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-corner {
-    background: transparent;
   }
 }
