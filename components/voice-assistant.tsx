@@ -43,12 +43,16 @@ function VoiceAssistantInner({
   onCameraToggle,
   onError,
   onConnectionStateChange,
+  onConnect,
+  onDisconnect,
 }: {
   onMessagesUpdate?: (messages: Message[]) => void
   isCameraEnabled?: boolean
   onCameraToggle?: () => void
   onError?: (error: string) => void
   onConnectionStateChange?: (state: ConnectionState) => void
+  onConnect?: () => void
+  onDisconnect?: () => void
 }) {
   const connectionState = useConnectionState()
   const localParticipant = useLocalParticipant()
@@ -159,10 +163,33 @@ function VoiceAssistantInner({
   const isCameraActive = localCameraTrack !== undefined
   const isLoading = connectionState === ConnectionState.Connecting
 
-  // Handle text message sending (placeholder for now)
-  const handleSendMessage = useCallback((message: string) => {
-    console.log("Sending text message:", message)
-    // TODO: Implement text message sending via LiveKit
+  // Handle text message sending with attachments
+  const handleSendMessage = useCallback((message: string, attachments?: any[]) => {
+    console.log("Sending message:", { message, attachments })
+
+    // Create a user message for immediate display
+    const userMessage: Message = {
+      id: `user-${Date.now()}-${Math.random()}`,
+      role: "user",
+      content: message,
+      timestamp: Date.now(),
+    }
+
+    // Add to messages immediately for better UX
+    setMessages((prev) => [...prev, userMessage])
+
+    // TODO: Send via LiveKit data channel or chat
+    // For now, just log the message and attachments
+    if (attachments && attachments.length > 0) {
+      console.log(
+        "Attachments:",
+        attachments.map((att) => ({
+          name: att.name,
+          type: att.type,
+          size: att.size,
+        })),
+      )
+    }
   }, [])
 
   // Handle voice toggle (placeholder for now)
@@ -197,8 +224,8 @@ function VoiceAssistantInner({
           isConnected={isConnected}
           isLoading={isLoading}
           isCameraEnabled={isCameraActive}
-          onConnect={() => {}}
-          onDisconnect={() => {}}
+          onConnect={onConnect}
+          onDisconnect={onDisconnect}
           onCameraToggle={onCameraToggle}
           currentState={currentState}
         />
@@ -352,10 +379,12 @@ export default function VoiceAssistant() {
     }
   }, [generateToken, shouldConnect, lastConnectionAttempt, clearReconnectTimeout])
 
-  // Handle disconnect with proper cleanup
+  // Handle disconnect with proper cleanup - FIXED
   const handleDisconnect = useCallback(async () => {
     console.log("🔄 Disconnecting...")
     clearReconnectTimeout()
+
+    // Immediately set shouldConnect to false to trigger disconnect
     setShouldConnect(false)
     setError(null)
     setRetryCount(0)
@@ -388,6 +417,7 @@ export default function VoiceAssistant() {
 
         case ConnectionState.Disconnected:
           console.log("🔄 Disconnected - manual reconnection required")
+          setIsLoading(false)
           break
 
         case ConnectionState.Reconnecting:
@@ -639,6 +669,8 @@ export default function VoiceAssistant() {
           onCameraToggle={toggleCamera}
           onError={handleError}
           onConnectionStateChange={handleConnectionStateChange}
+          onConnect={handleConnect}
+          onDisconnect={handleDisconnect}
         />
 
         {/* Enhanced Error Display */}
