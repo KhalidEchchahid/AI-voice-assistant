@@ -167,6 +167,31 @@
       }
     }
     
+    // FIXED: Add iframe origin to DOM Monitor's allowed origins to prevent security rejection
+    try {
+      const iframeOrigin = new URL(config.iframeUrl).origin
+      console.log(`AI Assistant Loader: Adding iframe origin to DOM Monitor allowed origins: ${iframeOrigin}`)
+      
+      // Wait for DOM Monitor to be ready, then add the origin
+      const addOriginWhenReady = () => {
+        if (window.DOMMonitor && window.DOMMonitor.communicationBridge) {
+          if (typeof window.DOMMonitor.communicationBridge.addAllowedOrigin === 'function') {
+            window.DOMMonitor.communicationBridge.addAllowedOrigin(iframeOrigin)
+            console.log(`✅ AI Assistant Loader: Successfully added iframe origin: ${iframeOrigin}`)
+          } else {
+            console.warn("⚠️ AI Assistant Loader: DOM Monitor communication bridge doesn't have addAllowedOrigin method")
+          }
+        } else {
+          // Retry after a short delay
+          setTimeout(addOriginWhenReady, 100)
+        }
+      }
+      
+      addOriginWhenReady()
+    } catch (error) {
+      console.error("❌ AI Assistant Loader: Error adding iframe origin to DOM Monitor:", error)
+    }
+    
     console.log("✅ AI Assistant Loader: DOM Monitor V2 compatibility layer added")
   }
   
@@ -925,7 +950,7 @@
 
   // --- Handle messages from iframe ---
   function setupMessageHandling() {
-    window.addEventListener("message", (event) => {
+    window.addEventListener("message", async (event) => {
       let expectedOrigin
       try {
         expectedOrigin = new URL(config.iframeUrl).origin
@@ -975,10 +1000,16 @@
                 try {
                   console.log('🔍 Processing DOM Monitor request:', { requestId, intent, options });
                   
-                  // Call DOM Monitor to find elements based on intent
-                  const elements = window.AIAssistantDOMMonitor.findElements(intent, options);
+                  // FIXED: Call DOM Monitor asynchronously and await the result
+                  const elements = await window.AIAssistantDOMMonitor.findElements(intent, options);
                   
                   console.log('📋 DOM Monitor found elements:', elements);
+                  
+                  // Ensure elements is an array before calling .map()
+                  if (!Array.isArray(elements)) {
+                    console.error('❌ DOM Monitor returned non-array:', typeof elements, elements);
+                    throw new Error(`DOM Monitor returned ${typeof elements} instead of array`);
+                  }
                   
                   // FIXED: Properly serialize elements to prevent clone errors
                   const serializedElements = elements.map(element => {
