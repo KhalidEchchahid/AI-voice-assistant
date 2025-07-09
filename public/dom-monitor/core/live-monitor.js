@@ -292,11 +292,10 @@
             const elementId = await this.elementCache.addElement(element)
             if (elementId) {
               addedCount++
-              if (this.config.debugMode) {
-                console.debug(`📦 DOM Monitor: Cached element ${elementId}:`, element.tagName)
-              }
+              console.log(`✅ DOM Monitor: Added element ${elementId}: ${element.tagName} - "${element.textContent?.trim().slice(0, 30) || 'no text'}"`)
             } else {
               skippedCount++
+              console.warn(`❌ DOM Monitor: Skipped element: ${element.tagName} - "${element.textContent?.trim().slice(0, 30) || 'no text'}" (not relevant or failed visibility check)`)
             }
           } catch (error) {
             console.warn("DOM Monitor: Error adding element during initial scan:", error)
@@ -432,7 +431,10 @@
 
     // Public API methods
     async findElements(intent, options = {}) {
+      console.log(`🔍 DOM Monitor: findElements called with intent="${intent}", options=`, options)
+      
       if (!this.isInitialized) {
+        console.log("🔄 DOM Monitor: Not initialized, initializing now...")
         await this.initialize()
       }
       
@@ -440,7 +442,16 @@
       const startTime = performance.now()
       
       try {
+        console.log(`📊 DOM Monitor: Cache status - Total elements: ${this.elementCache?.cache?.size || 0}`)
+        
         const result = await this.elementCache.findByIntent(intent, options)
+        
+        console.log(`🎯 DOM Monitor: Search completed - Found ${result.length} elements`)
+        if (result.length > 0) {
+          result.forEach((element, index) => {
+            console.log(`  ${index + 1}. ${element.elementId}: ${element.element.tagName} - "${element.element.text.slice(0, 30)}" (score: ${element.totalScore})`)
+          })
+        }
         
         // Update response time stats
         const responseTime = performance.now() - startTime

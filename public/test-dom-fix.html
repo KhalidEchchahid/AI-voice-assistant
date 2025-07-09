@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DOM Monitor Fix Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 6px; }
+        .test-button { padding: 10px 20px; margin: 10px; background: #007cba; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .test-input { padding: 8px; margin: 10px; border: 1px solid #ccc; border-radius: 4px; width: 200px; }
+        .test-select { padding: 8px; margin: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        .results { background: #f8f9fa; padding: 15px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #007cba; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .warning { color: orange; font-weight: bold; }
+        .info { color: blue; }
+        .log-entry { margin: 5px 0; padding: 5px; background: #f0f0f0; border-radius: 3px; font-family: monospace; font-size: 12px; }
+        .element-count { font-size: 18px; font-weight: bold; color: #007cba; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 DOM Monitor Fix Verification Test</h1>
+        <p>This page tests that the DOM Monitor async fix is working properly with the assistant iframe communication.</p>
+        
+        <div class="test-section">
+            <h2>🎯 Test Elements</h2>
+            <p>These elements should be discoverable by the DOM Monitor:</p>
+            
+            <button class="test-button" id="login-btn">Login Button</button>
+            <button class="test-button" id="submit-btn">Submit Form</button>
+            <button class="test-button" id="cancel-btn">Cancel Action</button>
+            
+            <br>
+            
+            <input type="text" class="test-input" id="username" placeholder="Username">
+            <input type="password" class="test-input" id="password" placeholder="Password">
+            <input type="email" class="test-input" id="email" placeholder="Email">
+            
+            <br>
+            
+            <select class="test-select" id="country">
+                <option value="">Select Country</option>
+                <option value="us">United States</option>
+                <option value="uk">United Kingdom</option>
+                <option value="ca">Canada</option>
+            </select>
+            
+            <br>
+            
+            <a href="#" id="forgot-link">Forgot Password?</a>
+            <a href="#" id="signup-link">Sign Up</a>
+        </div>
+        
+        <div class="test-section">
+            <h2>🧪 Test Controls</h2>
+            <button onclick="testDOMMonitor()" class="test-button">🔍 Test DOM Monitor</button>
+            <button onclick="testDirectCall()" class="test-button">📞 Test Direct Call</button>
+            <button onclick="clearLog()" class="test-button">🧹 Clear Log</button>
+            <button onclick="checkDOMMonitorStatus()" class="test-button">📊 Check Status</button>
+        </div>
+        
+        <div class="test-section">
+            <h2>📊 Results</h2>
+            <div id="status" class="results">Ready to test...</div>
+            <div id="element-count" class="element-count">Elements found: 0</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>📝 Debug Log</h2>
+            <div id="log" class="results" style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px;"></div>
+        </div>
+    </div>
+
+    <!-- Load DOM Monitor and Assistant -->
+    <script src="./dom-monitor/dom-monitor.js"></script>
+    <script src="./assistant-loader.js" 
+            data-iframe-url="https://ai-voice-assistant-nu.vercel.app/"
+            data-initially-visible="false"
+            data-position="right"
+            data-width="400px"
+            data-height="600px">
+    </script>
+    
+    <script>
+        // Logging utilities
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<span class="${type}">${message}</span>`;
+            log(message, type);
+        }
+        
+        function updateElementCount(count) {
+            document.getElementById('element-count').textContent = `Elements found: ${count}`;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            log('Log cleared');
+        }
+        
+        // Test DOM Monitor directly
+        async function testDirectCall() {
+            updateStatus('Testing direct DOM Monitor call...', 'info');
+            
+            try {
+                if (!window.DOMMonitor) {
+                    updateStatus('❌ DOMMonitor not available', 'error');
+                    return;
+                }
+                
+                log('Calling DOMMonitor.findElements directly...');
+                const result = await window.DOMMonitor.findElements('interactive elements', {
+                    visible: true,
+                    interactable: true,
+                    max_elements: 20
+                });
+                
+                log(`Direct call returned: ${JSON.stringify(result, null, 2)}`);
+                
+                if (Array.isArray(result)) {
+                    updateStatus(`✅ Direct call successful! Found ${result.length} elements`, 'success');
+                    updateElementCount(result.length);
+                } else if (result && Array.isArray(result.elements)) {
+                    updateStatus(`✅ Direct call successful! Found ${result.elements.length} elements`, 'success');
+                    updateElementCount(result.elements.length);
+                } else {
+                    updateStatus(`⚠️ Direct call returned unexpected format: ${typeof result}`, 'warning');
+                }
+                
+            } catch (error) {
+                updateStatus(`❌ Direct call failed: ${error.message}`, 'error');
+                log(`Direct call error: ${error.stack}`, 'error');
+            }
+        }
+        
+        // Test DOM Monitor via compatibility layer
+        async function testDOMMonitor() {
+            updateStatus('Testing DOM Monitor via compatibility layer...', 'info');
+            
+            try {
+                if (!window.AIAssistantDOMMonitor) {
+                    updateStatus('❌ AIAssistantDOMMonitor not available', 'error');
+                    return;
+                }
+                
+                log('Calling AIAssistantDOMMonitor.findElements...');
+                const elements = await window.AIAssistantDOMMonitor.findElements('interactive elements', {
+                    visible: true,
+                    interactable: true,
+                    max_elements: 20
+                });
+                
+                log(`Compatibility layer returned: ${JSON.stringify(elements, null, 2)}`);
+                
+                if (Array.isArray(elements)) {
+                    updateStatus(`✅ Compatibility layer test successful! Found ${elements.length} elements`, 'success');
+                    updateElementCount(elements.length);
+                    
+                    // Show some sample elements
+                    if (elements.length > 0) {
+                        log('Sample elements found:');
+                        elements.slice(0, 3).forEach((element, index) => {
+                            log(`  ${index + 1}. ${element.tagName} - "${element.text}" (${element.elementId})`);
+                        });
+                    }
+                } else {
+                    updateStatus(`❌ Compatibility layer returned non-array: ${typeof elements}`, 'error');
+                }
+                
+            } catch (error) {
+                updateStatus(`❌ Compatibility layer test failed: ${error.message}`, 'error');
+                log(`Compatibility layer error: ${error.stack}`, 'error');
+            }
+        }
+        
+        // Check DOM Monitor status
+        function checkDOMMonitorStatus() {
+            log('Checking DOM Monitor status...');
+            
+            const checks = [
+                { name: 'window.DOMMonitor', value: !!window.DOMMonitor },
+                { name: 'window.AIAssistantDOMMonitor', value: !!window.AIAssistantDOMMonitor },
+                { name: 'window.AIAssistantLoader', value: !!window.AIAssistantLoader },
+                { name: 'DOMMonitor.findElements', value: !!(window.DOMMonitor && window.DOMMonitor.findElements) },
+                { name: 'AIAssistantDOMMonitor.findElements', value: !!(window.AIAssistantDOMMonitor && window.AIAssistantDOMMonitor.findElements) },
+                { name: 'DOMMonitor.isReady', value: window.DOMMonitor && window.DOMMonitor.isReady ? window.DOMMonitor.isReady() : false },
+                { name: 'AIAssistantDOMMonitor.isReady', value: window.AIAssistantDOMMonitor && window.AIAssistantDOMMonitor.isReady ? window.AIAssistantDOMMonitor.isReady() : false }
+            ];
+            
+            checks.forEach(check => {
+                const status = check.value ? '✅' : '❌';
+                log(`${status} ${check.name}: ${check.value}`);
+            });
+            
+            if (window.DOMMonitor && window.DOMMonitor.getStats) {
+                try {
+                    const stats = window.DOMMonitor.getStats();
+                    log(`DOMMonitor stats: ${JSON.stringify(stats, null, 2)}`);
+                } catch (error) {
+                    log(`Error getting DOMMonitor stats: ${error.message}`, 'error');
+                }
+            }
+            
+            updateStatus('Status check complete - see log for details', 'info');
+        }
+        
+        // Initialize
+        window.addEventListener('load', () => {
+            log('Page loaded, initializing tests...');
+            
+            // Wait a bit for DOM Monitor to initialize
+            setTimeout(() => {
+                checkDOMMonitorStatus();
+                log('Ready to test! Click the test buttons above.');
+                updateStatus('✅ Page loaded and ready for testing', 'success');
+            }, 2000);
+        });
+        
+        // Listen for console errors
+        window.addEventListener('error', (event) => {
+            log(`Page error: ${event.error.message}`, 'error');
+        });
+        
+        // Override console methods to capture logs
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            if (args[0] && typeof args[0] === 'string' && args[0].includes('DOM Monitor')) {
+                log(`Console: ${args.join(' ')}`);
+            }
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            if (args[0] && typeof args[0] === 'string') {
+                log(`Error: ${args.join(' ')}`, 'error');
+            }
+        };
+        
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            if (args[0] && typeof args[0] === 'string') {
+                log(`Warning: ${args.join(' ')}`, 'warning');
+            }
+        };
+    </script>
+</body>
+</html> 

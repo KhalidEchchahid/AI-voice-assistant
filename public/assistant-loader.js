@@ -107,10 +107,25 @@
             return [];
           }
           
+          // CRITICAL FIX: Wait for DOM Monitor to be ready
+          let attempts = 0;
+          while (!window.DOMMonitor.isReady() && attempts < 50) {
+            console.log(`⏳ Compatibility Layer: Waiting for DOM Monitor to be ready (attempt ${attempts + 1})`);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+          }
+          
+          if (!window.DOMMonitor.isReady()) {
+            console.error('❌ Compatibility Layer: DOM Monitor failed to initialize after 5 seconds');
+            return [];
+          }
+          
           if (!window.DOMMonitor.findElements) {
             console.warn('⚠️ Compatibility Layer: DOMMonitor.findElements not available');
             return [];
           }
+          
+          console.log('✅ Compatibility Layer: DOM Monitor is ready, calling findElements...');
           
           // Call the actual DOM Monitor method and await the result
           const result = await window.DOMMonitor.findElements(intent, options);
