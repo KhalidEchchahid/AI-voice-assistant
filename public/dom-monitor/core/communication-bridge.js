@@ -155,6 +155,7 @@
     validateMessageSecurity(event) {
       // Check origin
       if (!this.allowedOrigins.has(event.origin)) {
+        // CRITICAL FIX: Be more lenient with origin validation for assistant iframes
         // In development, be more lenient
         if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
           const url = new URL(event.origin)
@@ -162,6 +163,20 @@
             return true
           }
         }
+        
+        // Allow Vercel deployments for AI assistant
+        if (event.origin.includes('vercel.app') || event.origin.includes('ai-voice-assistant')) {
+          console.log(`DOM Monitor: Auto-allowing AI assistant origin: ${event.origin}`)
+          this.addAllowedOrigin(event.origin)
+          return true
+        }
+        
+        // Allow same-origin messages (within the same page)
+        if (event.origin === window.location.origin) {
+          return true
+        }
+        
+        console.warn(`DOM Monitor: Origin not allowed: ${event.origin}. Allowed origins:`, Array.from(this.allowedOrigins))
         return false
       }
       

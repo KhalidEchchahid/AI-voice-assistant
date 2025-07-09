@@ -233,12 +233,22 @@
     }
 
     checkVisibility() {
-      if (!this.element.offsetParent && this.element.style.display !== 'none') return false
+      // CRITICAL FIX: Corrected the logic - only return false if display is 'none' AND no offsetParent
+      if (this.element.style.display === 'none') return false
       if (this.element.style.visibility === 'hidden') return false
       if (this.element.style.opacity === '0') return false
       
+      // Special case: if element has no offsetParent but is not display:none, 
+      // it might be positioned absolutely/fixed or be the body element - check rect
       const rect = this.element.getBoundingClientRect()
-      return rect.width > 0 && rect.height > 0
+      const hasSize = rect.width > 0 && rect.height > 0
+      
+      // If no offsetParent but has size, it's likely positioned and still visible
+      if (!this.element.offsetParent) {
+        return hasSize && this.element !== document.body
+      }
+      
+      return hasSize
     }
 
     checkInteractability() {
