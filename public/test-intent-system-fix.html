@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM Monitor Intent System Fix Verification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; font-weight: bold; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .test-result {
+            border-left: 4px solid #007bff;
+            padding: 10px;
+            margin: 10px 0;
+            background: #f8f9fa;
+        }
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .test-button:hover { background: #0056b3; }
+        .element-list { max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px; }
+        .element-item { 
+            padding: 8px; 
+            margin: 4px 0; 
+            background: white; 
+            border-radius: 3px;
+            border-left: 3px solid #28a745;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        h2 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 DOM Monitor Intent System Fix Verification</h1>
+        
+        <div id="initialization-status" class="status warning">
+            ⏳ Initializing DOM Monitor...
+        </div>
+
+        <!-- Test Elements Section -->
+        <div class="test-section">
+            <h2>🧪 Test Elements (These will be detected by the DOM Monitor)</h2>
+            
+            <!-- Interactive Elements -->
+            <button id="test-btn-1" class="test-button">Test Button 1</button>
+            <button id="test-btn-2" class="test-button">Submit Form</button>
+            <a href="#test" id="test-link-1">Test Navigation Link</a>
+            <a href="https://example.com" target="_blank" id="test-link-2">External Link</a>
+            
+            <!-- Form Elements -->
+            <div style="margin: 20px 0;">
+                <input type="text" id="first-name" placeholder="First Name" name="firstName">
+                <input type="text" id="last-name" placeholder="Last Name" name="lastName">
+                <input type="email" id="email" placeholder="Email Address" name="email">
+                <input type="text" id="company" placeholder="Company Name" name="company">
+                <input type="tel" id="phone" placeholder="Phone Number" name="phone">
+                <input type="password" id="password" placeholder="Password" name="password">
+                <textarea id="message" placeholder="Message" name="message"></textarea>
+                <select id="country" name="country">
+                    <option value="">Select Country</option>
+                    <option value="us">United States</option>
+                    <option value="ca">Canada</option>
+                </select>
+            </div>
+            
+            <!-- Media Elements -->
+            <div style="margin: 20px 0;">
+                <video id="test-video" controls width="200" height="150">
+                    <source src="data:video/mp4;base64," type="video/mp4">
+                </video>
+                <audio id="test-audio" controls>
+                    <source src="data:audio/mp3;base64," type="audio/mp3">
+                </audio>
+            </div>
+            
+            <!-- Scrollable Elements -->
+            <div id="scrollable-content" style="height: 100px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px;">
+                <p>This is scrollable content. Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+                <p>More content here to make it scrollable...</p>
+                <p>Even more content to ensure scrolling is needed...</p>
+                <p>And more content for good measure...</p>
+            </div>
+        </div>
+
+        <!-- Test Results Section -->
+        <div class="test-section">
+            <h2>🎯 Intent Category Tests</h2>
+            <div id="test-controls">
+                <button class="test-button" onclick="runAllTests()">🚀 Run All Tests</button>
+                <button class="test-button" onclick="clearResults()">🧹 Clear Results</button>
+            </div>
+            <div id="test-results"></div>
+        </div>
+
+        <!-- Individual Test Buttons -->
+        <div class="test-section">
+            <h2>🔍 Individual Intent Tests</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                <button class="test-button" onclick="testIntent('get_all_interactive')">get_all_interactive</button>
+                <button class="test-button" onclick="testIntent('get_clickable_elements')">get_clickable_elements</button>
+                <button class="test-button" onclick="testIntent('get_form_elements')">get_form_elements</button>
+                <button class="test-button" onclick="testIntent('get_navigation_elements')">get_navigation_elements</button>
+                <button class="test-button" onclick="testIntent('get_media_elements')">get_media_elements</button>
+                <button class="test-button" onclick="testIntent('get_buttons')">get_buttons</button>
+                <button class="test-button" onclick="testIntent('get_links')">get_links</button>
+                <button class="test-button" onclick="testIntent('get_inputs')">get_inputs</button>
+                <button class="test-button" onclick="testIntent('get_visible_elements')">get_visible_elements</button>
+            </div>
+        </div>
+
+        <!-- Legacy Intent Tests -->
+        <div class="test-section">
+            <h2>🔄 Legacy Intent Tests (Should use fallback)</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                <button class="test-button" onclick="testIntent('list interactive elements')">list interactive elements</button>
+                <button class="test-button" onclick="testIntent('find buttons')">find buttons</button>
+                <button class="test-button" onclick="testIntent('show all elements')">show all elements</button>
+                <button class="test-button" onclick="testIntent('get clickable items')">get clickable items</button>
+                <button class="test-button" onclick="testIntent('fill company name')">fill company name</button>
+            </div>
+        </div>
+
+        <!-- Semantic Mapping Tests -->
+        <div class="test-section">
+            <h2>🧠 Semantic Mapping Tests</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                <button class="test-button" onclick="testIntent('company')">company</button>
+                <button class="test-button" onclick="testIntent('organization')">organization</button>
+                <button class="test-button" onclick="testIntent('first name')">first name</button>
+                <button class="test-button" onclick="testIntent('email address')">email address</button>
+                <button class="test-button" onclick="testIntent('login')">login</button>
+                <button class="test-button" onclick="testIntent('contact us')">contact us</button>
+            </div>
+        </div>
+
+        <!-- Debug Information -->
+        <div class="test-section">
+            <h2>🐛 Debug Information</h2>
+            <div id="debug-info">
+                <button class="test-button" onclick="showDebugInfo()">Show Debug Info</button>
+                <div id="debug-output"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assistant-loader.js"></script>
+    
+    <script>
+        let testResults = [];
+        let monitor = null;
+
+        // Initialize DOM Monitor
+        async function initializeMonitor() {
+            const statusDiv = document.getElementById('initialization-status');
+            
+            let attempts = 0;
+            while ((!window.DOMMonitor || !window.AIAssistantDOMMonitor) && attempts < 60) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                attempts++;
+            }
+            
+            if (!window.DOMMonitor || !window.AIAssistantDOMMonitor) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ DOM Monitor failed to load after 30 seconds';
+                return false;
+            }
+
+            monitor = window.DOMMonitor;
+            
+            // Wait for initialization and initial scan
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            statusDiv.className = 'status success';
+            statusDiv.textContent = '✅ DOM Monitor initialized successfully';
+            
+            // Show cache status
+            const stats = window.AIAssistantDOMMonitor.getStats();
+            statusDiv.innerHTML += `<br>📊 Cache: ${stats.cache?.totalElements || 0} elements`;
+            
+            return true;
+        }
+
+        // Test individual intent
+        async function testIntent(intent) {
+            if (!monitor) {
+                alert('DOM Monitor not initialized');
+                return;
+            }
+
+            const startTime = performance.now();
+            
+            try {
+                console.log(`\n🧪 Testing intent: "${intent}"`);
+                
+                const elements = await monitor.findElements(intent);
+                const duration = performance.now() - startTime;
+                
+                const result = {
+                    intent,
+                    elementCount: elements.length,
+                    duration: Math.round(duration),
+                    success: true,
+                    elements: elements.slice(0, 5) // First 5 elements for display
+                };
+                
+                console.log(`✅ Intent "${intent}" returned ${elements.length} elements in ${duration.toFixed(1)}ms`);
+                
+                if (elements.length > 0) {
+                    console.log('Sample elements:');
+                    elements.slice(0, 3).forEach((elem, i) => {
+                        console.log(`  ${i+1}. ${elem.element.tagName} - "${elem.element.text?.slice(0, 30) || 'no text'}"`);
+                    });
+                }
+                
+                testResults.push(result);
+                displayTestResult(result);
+                
+            } catch (error) {
+                console.error(`❌ Error testing intent "${intent}":`, error);
+                
+                const result = {
+                    intent,
+                    elementCount: 0,
+                    duration: 0,
+                    success: false,
+                    error: error.message
+                };
+                
+                testResults.push(result);
+                displayTestResult(result);
+            }
+        }
+
+        // Display test result
+        function displayTestResult(result) {
+            const resultsDiv = document.getElementById('test-results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'test-result';
+            
+            let html = `
+                <strong>Intent:</strong> "${result.intent}"<br>
+                <strong>Elements Found:</strong> ${result.elementCount}<br>
+                <strong>Duration:</strong> ${result.duration}ms<br>
+                <strong>Status:</strong> ${result.success ? '✅ Success' : '❌ Failed'}
+            `;
+            
+            if (result.error) {
+                html += `<br><strong>Error:</strong> ${result.error}`;
+            }
+            
+            if (result.elements && result.elements.length > 0) {
+                html += '<br><strong>Sample Elements:</strong>';
+                html += '<div class="element-list">';
+                result.elements.forEach((elem, i) => {
+                    html += `
+                        <div class="element-item">
+                            ${i+1}. &lt;${elem.element.tagName}&gt; 
+                            "${elem.element.text?.slice(0, 40) || 'no text'}" 
+                            (score: ${elem.totalScore?.toFixed(2) || 'N/A'})
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            resultDiv.innerHTML = html;
+            resultsDiv.appendChild(resultDiv);
+            
+            // Auto-scroll to latest result
+            resultDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Run all tests
+        async function runAllTests() {
+            const defaultIntents = [
+                'get_all_interactive',
+                'get_clickable_elements', 
+                'get_form_elements',
+                'get_navigation_elements',
+                'get_media_elements',
+                'get_buttons',
+                'get_links',
+                'get_inputs'
+            ];
+            
+            const legacyIntents = [
+                'list interactive elements',
+                'find buttons',
+                'show all elements',
+                'fill company name'
+            ];
+            
+            clearResults();
+            
+            console.log('\n🚀 Running comprehensive intent system tests...\n');
+            
+            // Test default intents
+            for (const intent of defaultIntents) {
+                await testIntent(intent);
+                await new Promise(resolve => setTimeout(resolve, 200)); // Small delay
+            }
+            
+            // Test legacy intents
+            for (const intent of legacyIntents) {
+                await testIntent(intent);
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            
+            // Show summary
+            showTestSummary();
+        }
+
+        // Show test summary
+        function showTestSummary() {
+            const totalTests = testResults.length;
+            const successfulTests = testResults.filter(r => r.success && r.elementCount > 0).length;
+            const failedTests = testResults.filter(r => !r.success).length;
+            const emptyResults = testResults.filter(r => r.success && r.elementCount === 0).length;
+            
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = 'test-result';
+            summaryDiv.style.backgroundColor = '#e3f2fd';
+            summaryDiv.style.borderLeft = '4px solid #2196f3';
+            
+            summaryDiv.innerHTML = `
+                <h3>📊 Test Summary</h3>
+                <strong>Total Tests:</strong> ${totalTests}<br>
+                <strong>Successful (with results):</strong> ${successfulTests}<br>
+                <strong>Empty Results:</strong> ${emptyResults}<br>
+                <strong>Failed:</strong> ${failedTests}<br>
+                <strong>Success Rate:</strong> ${Math.round((successfulTests / totalTests) * 100)}%
+            `;
+            
+            document.getElementById('test-results').appendChild(summaryDiv);
+        }
+
+        // Clear results
+        function clearResults() {
+            testResults = [];
+            document.getElementById('test-results').innerHTML = '';
+        }
+
+        // Show debug info
+        async function showDebugInfo() {
+            const debugOutput = document.getElementById('debug-output');
+            
+            try {
+                const stats = window.AIAssistantDOMMonitor.getStats();
+                const status = window.AIAssistantDOMMonitor.getStatus();
+                
+                debugOutput.innerHTML = `
+                    <div class="element-list">
+                        <h4>DOM Monitor Statistics:</h4>
+                        <pre>${JSON.stringify(stats, null, 2)}</pre>
+                        
+                        <h4>DOM Monitor Status:</h4>
+                        <pre>${JSON.stringify(status, null, 2)}</pre>
+                        
+                        <h4>Available Methods:</h4>
+                        <pre>${Object.getOwnPropertyNames(window.AIAssistantDOMMonitor).join(', ')}</pre>
+                        
+                        <h4>Cache Internal Access:</h4>
+                        <pre>Cache size: ${window.AIAssistantDOMMonitor._internal?.cache?.cache?.size || 'N/A'}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                debugOutput.innerHTML = `<div class="status error">Error getting debug info: ${error.message}</div>`;
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('🔧 DOM Monitor Intent System Fix Verification starting...');
+            await initializeMonitor();
+        });
+    </script>
+</body>
+</html> 
