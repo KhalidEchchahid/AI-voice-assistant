@@ -97,7 +97,40 @@
     window.AIAssistantDOMMonitor = {
       // Forward core DOMMonitor methods with proper binding and error handling
       initialize: () => window.DOMMonitor?.initialize?.() || Promise.resolve(),
-      findElements: (intent, options) => window.DOMMonitor?.findElements?.(intent, options) || Promise.resolve([]),
+      // CRITICAL FIX: Properly handle async findElements and ensure it returns a Promise
+      findElements: async (intent, options) => {
+        try {
+          console.log('🔍 Compatibility Layer: findElements called with:', { intent, options });
+          
+          if (!window.DOMMonitor) {
+            console.warn('⚠️ Compatibility Layer: DOMMonitor not available');
+            return [];
+          }
+          
+          if (!window.DOMMonitor.findElements) {
+            console.warn('⚠️ Compatibility Layer: DOMMonitor.findElements not available');
+            return [];
+          }
+          
+          // Call the actual DOM Monitor method and await the result
+          const result = await window.DOMMonitor.findElements(intent, options);
+          console.log('✅ Compatibility Layer: DOM Monitor returned:', result);
+          
+          // Ensure we return an array
+          if (Array.isArray(result)) {
+            return result;
+          } else if (result && Array.isArray(result.elements)) {
+            return result.elements;
+          } else {
+            console.warn('⚠️ Compatibility Layer: DOM Monitor returned unexpected format:', typeof result, result);
+            return [];
+          }
+          
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error in findElements:', error);
+          return [];
+        }
+      },
       getAllElements: (filter) => window.DOMMonitor?.getAllElements?.(filter) || Promise.resolve([]),
       forceRescan: () => window.DOMMonitor?.forceRescan?.() || Promise.resolve({ success: false, error: "Not available" }),
       getStats: () => window.DOMMonitor?.getStats?.() || { cache: { totalElements: 0 } },
@@ -167,30 +200,46 @@
       }
     }
     
-    // FIXED: Add iframe origin to DOM Monitor's allowed origins to prevent security rejection
-    try {
-      const iframeOrigin = new URL(config.iframeUrl).origin
-      console.log(`AI Assistant Loader: Adding iframe origin to DOM Monitor allowed origins: ${iframeOrigin}`)
-      
-      // Wait for DOM Monitor to be ready, then add the origin
-      const addOriginWhenReady = () => {
-        if (window.DOMMonitor && window.DOMMonitor.communicationBridge) {
-          if (typeof window.DOMMonitor.communicationBridge.addAllowedOrigin === 'function') {
-            window.DOMMonitor.communicationBridge.addAllowedOrigin(iframeOrigin)
-            console.log(`✅ AI Assistant Loader: Successfully added iframe origin: ${iframeOrigin}`)
+          // CRITICAL FIX: Add iframe origin to DOM Monitor's allowed origins to prevent security rejection
+      try {
+        const iframeOrigin = new URL(config.iframeUrl).origin
+        console.log(`AI Assistant Loader: Adding iframe origin to DOM Monitor allowed origins: ${iframeOrigin}`)
+        
+        // Wait for DOM Monitor to be ready, then add the origin
+        let attempts = 0
+        const addOriginWhenReady = () => {
+          attempts++
+          if (window.DOMMonitor && window.DOMMonitor.communicationBridge) {
+            if (typeof window.DOMMonitor.communicationBridge.addAllowedOrigin === 'function') {
+              window.DOMMonitor.communicationBridge.addAllowedOrigin(iframeOrigin)
+              console.log(`✅ AI Assistant Loader: Successfully added iframe origin: ${iframeOrigin}`)
+              
+              // ADDITIONAL FIX: Also add current page origin and common variations
+              const currentOrigin = window.location.origin
+              window.DOMMonitor.communicationBridge.addAllowedOrigin(currentOrigin)
+              console.log(`✅ AI Assistant Loader: Added current page origin: ${currentOrigin}`)
+              
+              // Add wildcard variations for Vercel deployments
+              if (iframeOrigin.includes('vercel.app')) {
+                window.DOMMonitor.communicationBridge.addAllowedOrigin('https://*.vercel.app')
+                console.log(`✅ AI Assistant Loader: Added Vercel wildcard origin`)
+              }
+              
+            } else {
+              console.warn("⚠️ AI Assistant Loader: DOM Monitor communication bridge doesn't have addAllowedOrigin method")
+            }
+          } else if (attempts < 50) {
+            // Retry after a short delay, max 5 seconds
+            setTimeout(addOriginWhenReady, 100)
           } else {
-            console.warn("⚠️ AI Assistant Loader: DOM Monitor communication bridge doesn't have addAllowedOrigin method")
+            console.error("❌ AI Assistant Loader: Failed to add origins after 5 seconds")
           }
-        } else {
-          // Retry after a short delay
-          setTimeout(addOriginWhenReady, 100)
         }
+        
+        addOriginWhenReady()
+      } catch (error) {
+        console.error("❌ AI Assistant Loader: Error adding iframe origin to DOM Monitor:", error)
       }
-      
-      addOriginWhenReady()
-    } catch (error) {
-      console.error("❌ AI Assistant Loader: Error adding iframe origin to DOM Monitor:", error)
-    }
     
     console.log("✅ AI Assistant Loader: DOM Monitor V2 compatibility layer added")
   }
@@ -997,145 +1046,39 @@
               const options = requestData.options || {};
               
               if (window.AIAssistantDOMMonitor) {
-                try {
+                (async () => {
+                  try {
                   console.log('🔍 Processing DOM Monitor request:', { requestId, intent, options });
                   
-                  // FIXED: Call DOM Monitor asynchronously and await the result
+                  // CRITICAL FIX: Use the DOM Monitor compatibility layer with proper async handling
+                  console.log('🔍 Calling DOM Monitor via compatibility layer with:', { intent, options });
+                  
+                  // Call the DOM Monitor through the compatibility layer (which handles async properly)
                   const elements = await window.AIAssistantDOMMonitor.findElements(intent, options);
                   
-                  console.log('📋 DOM Monitor found elements:', elements);
+                  console.log('📥 DOM Monitor returned elements:', elements);
                   
-                  // Ensure elements is an array before calling .map()
+                  // Ensure elements is an array
                   if (!Array.isArray(elements)) {
                     console.error('❌ DOM Monitor returned non-array:', typeof elements, elements);
                     throw new Error(`DOM Monitor returned ${typeof elements} instead of array`);
                   }
                   
-                  // FIXED: Properly serialize elements to prevent clone errors
-                  const serializedElements = elements.map(element => {
-                    console.log('🔍 Serializing element:', element); // Debug log
-                    
-                    // CORRECTED: Use the already-extracted text from DOM Monitor
-                    // The structure is: element.element.text (already extracted by DOM Monitor)
-                    const elementData = element.element; // This is the elementData from DOM Monitor
-                    const domElement = elementData?.element; // This is the actual DOM element
-                    
-                    // Use the text that DOM Monitor already extracted
-                    let elementText = elementData?.text || '';
-                    
-                    // Only try DOM extraction as a fallback if DOM Monitor text is empty
-                    if (!elementText && domElement) {
-                      console.log('🔍 DOM Monitor text empty, trying DOM extraction as fallback...');
-                      try {
-                        if (domElement.textContent && domElement.textContent.trim()) {
-                          elementText = domElement.textContent.trim();
-                          console.log('✅ Got fallback text from textContent:', elementText.substring(0, 50));
-                        } else if (domElement.innerText && domElement.innerText.trim()) {
-                          elementText = domElement.innerText.trim();
-                          console.log('✅ Got fallback text from innerText:', elementText.substring(0, 50));
-                        } else if (domElement.value) {
-                          elementText = domElement.value;
-                          console.log('✅ Got fallback text from value:', elementText.substring(0, 50));
-                        } else if (domElement.alt) {
-                          elementText = domElement.alt;
-                          console.log('✅ Got fallback text from alt:', elementText.substring(0, 50));
-                        } else if (domElement.title) {
-                          elementText = domElement.title;
-                          console.log('✅ Got fallback text from title:', elementText.substring(0, 50));
-                        } else if (domElement.placeholder) {
-                          elementText = domElement.placeholder;
-                          console.log('✅ Got fallback text from placeholder:', elementText.substring(0, 50));
-                        } else if (domElement.getAttribute && domElement.getAttribute('aria-label')) {
-                          elementText = domElement.getAttribute('aria-label');
-                          console.log('✅ Got fallback text from aria-label:', elementText.substring(0, 50));
-                        }
-                      } catch (e) {
-                        console.error('❌ Error extracting fallback text from DOM element:', e);
-                      }
-                    } else if (elementText) {
-                      console.log('✅ Using DOM Monitor extracted text:', elementText.substring(0, 50));
-                    }
-                    
-                    // Last resort: extract from elementId if it contains encoded text
-                    if (!elementText && (element.elementId || elementData?.id)) {
-                      const elementId = element.elementId || elementData.id;
-                      // Element IDs like "button___call_790_99" contain the text
-                      const idParts = elementId.split('___');
-                      if (idParts.length > 1) {
-                        const textPart = idParts[1].split('__')[0]; // Get part before coordinates
-                        if (textPart && textPart !== (elementData?.tagName || element.tagName)) {
-                          elementText = textPart.replace(/_/g, ' '); // Convert underscores to spaces
-                          console.log('✅ Got text from elementId:', elementText);
-                        }
-                      }
-                    }
-                    
-                    // Clean up the text (remove extra whitespace, truncate if too long)
-                    if (elementText) {
-                      elementText = elementText.replace(/\s+/g, ' ').trim();
-                      if (elementText.length > 200) {
-                        elementText = elementText.substring(0, 197) + '...';
-                      }
-                    }
-                    
-                    // Extract attributes - use DOM Monitor data first, then fallback to DOM
-                    let elementAttrs = elementData?.attributes || {};
-                    if (domElement && Object.keys(elementAttrs).length === 0) {
-                      try {
-                        elementAttrs = {
-                          id: domElement.id || '',
-                          className: domElement.className || '',
-                          href: domElement.href || '',
-                          src: domElement.src || '',
-                          alt: domElement.alt || '',
-                          title: domElement.title || '',
-                          placeholder: domElement.placeholder || '',
-                          type: domElement.type || '',
-                          name: domElement.name || '',
-                          ariaLabel: domElement.getAttribute ? domElement.getAttribute('aria-label') || '' : '',
-                          role: domElement.getAttribute ? domElement.getAttribute('role') || '' : ''
-                        };
-                      } catch (e) {
-                        console.error('❌ Error extracting attributes:', e);
-                      }
-                    }
-                    
-                    // Create a comprehensive serialized element using DOM Monitor data
-                    const serialized = {
-                      elementId: element.elementId || elementData?.id || 'unknown',
-                      tagName: elementData?.tagName || element.tagName || 'unknown',
-                      text: elementText,
-                      role: elementData?.role || element.role || elementAttrs.role || 'unknown',
-                      confidence: element.confidence || 0.8,
-                      position: elementData?.position || element.position || {},
-                      visibility: elementData?.visibility !== undefined ? elementData.visibility : true,
-                      interactable: elementData?.interactable !== undefined ? elementData.interactable : true,
-                      selectors: elementData?.selectors || element.selectors || [],
-                      attributes: elementAttrs,
-                      // Add debugging info
-                      debug: {
-                        originalTextFound: !!elementText,
-                        textSource: elementText ? (elementData?.text ? 'dom_monitor' : (domElement ? 'dom_fallback' : 'elementId')) : 'none',
-                        hasElement: !!domElement,
-                        hasElementData: !!elementData,
-                        elementKeys: elementData ? Object.keys(elementData) : [],
-                        textLength: elementText ? elementText.length : 0,
-                        domMonitorText: elementData?.text || 'none',
-                        domMonitorTextLength: elementData?.text ? elementData.text.length : 0
-                      }
-                    };
-                    
-                    console.log('✅ Serialized element:', {
-                      id: serialized.elementId.substring(0, 30) + '...',
-                      tag: serialized.tagName,
-                      text: serialized.text.substring(0, 50) + (serialized.text.length > 50 ? '...' : ''),
-                      textLength: serialized.text.length,
-                      textSource: serialized.debug.textSource,
-                      domMonitorText: serialized.debug.domMonitorText.substring(0, 30) + '...'
-                    });
-                    
-                    return serialized;
-                  });
+                  // Process the elements and send response
+                  const serializedElements = elements.map(element => ({
+                    elementId: element.elementId || 'unknown',
+                    tagName: element.tagName || 'unknown',
+                    text: element.text || '',
+                    role: element.role || 'unknown',
+                    confidence: element.confidence || 0.8,
+                    position: element.position || {},
+                    visibility: element.visibility || true,
+                    interactable: element.interactable || true,
+                    selectors: element.selectors || [],
+                    attributes: element.attributes || {}
+                  }));
+                  
+                  console.log('✅ Processed elements:', serializedElements.length, 'elements found');
                   
                   // Prepare response for backend
                   const response = {
@@ -1168,7 +1111,8 @@
                   };
                   
                   sendMessageToIframe(errorResponse);
-                }
+                  }
+                })(); // Close the async IIFE
               } else {
                 console.warn('⚠️ DOM Monitor not available for request:', requestId);
                 
