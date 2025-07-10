@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistant Loader Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .log {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔧 Assistant Loader Path Resolution Test</h1>
+        <p>Testing the fixed script loading paths and iframe URL configuration</p>
+    </div>
+
+    <div class="container">
+        <h2>📊 Loading Status</h2>
+        <div id="status-container">
+            <div class="status info">🔄 Starting test...</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🔍 Debug Information</h2>
+        <div><strong>Current URL:</strong> <span id="current-url"></span></div>
+        <div><strong>Origin:</strong> <span id="origin"></span></div>
+        <div><strong>Pathname:</strong> <span id="pathname"></span></div>
+        <div><strong>Expected Helper Path:</strong> <span id="helper-path"></span></div>
+        <div><strong>Expected DOM Monitor Path:</strong> <span id="monitor-path"></span></div>
+        <div><strong>Expected iframe URL:</strong> <span id="iframe-url"></span></div>
+    </div>
+
+    <div class="container">
+        <h2>📝 Console Log</h2>
+        <div id="log" class="log"></div>
+        <button onclick="clearLog()">Clear Log</button>
+        <button onclick="testDOMMonitor()">Test DOM Monitor</button>
+        <button onclick="testHelper()">Test Helper</button>
+    </div>
+
+    <script>
+        // Capture console.log and display in our log area
+        const logDiv = document.getElementById('log');
+        const statusContainer = document.getElementById('status-container');
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        
+        function addToLog(message, type = 'log') {
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#ff4444' : type === 'warn' ? '#ffaa00' : '#00ff00';
+            logDiv.innerHTML += `<span style="color: ${color}">[${timestamp}] ${message}</span>\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function addStatus(message, type = 'info') {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = message;
+            statusContainer.appendChild(statusDiv);
+        }
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addToLog(args.join(' '), 'log');
+        };
+        
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            addToLog('⚠️ ' + args.join(' '), 'warn');
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addToLog('❌ ' + args.join(' '), 'error');
+        };
+        
+        // Display current environment info
+        document.getElementById('current-url').textContent = window.location.href;
+        document.getElementById('origin').textContent = window.location.origin;
+        document.getElementById('pathname').textContent = window.location.pathname;
+        
+        // Calculate expected paths
+        const expectedHelperPath = window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'assistant-helper.js';
+        const expectedMonitorPath = window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'dom-monitor/dom-monitor.js';
+        const expectedIframeUrl = window.location.origin + window.location.pathname;
+        
+        document.getElementById('helper-path').textContent = expectedHelperPath;
+        document.getElementById('monitor-path').textContent = expectedMonitorPath;
+        document.getElementById('iframe-url').textContent = expectedIframeUrl;
+        
+        function clearLog() {
+            logDiv.innerHTML = '';
+        }
+        
+        function testDOMMonitor() {
+            if (window.DOMMonitor) {
+                addStatus('✅ DOM Monitor V2 is loaded!', 'success');
+                console.log('DOM Monitor V2 detected:', window.DOMMonitor);
+                
+                if (window.AIAssistantDOMMonitor) {
+                    addStatus('✅ DOM Monitor compatibility layer is loaded!', 'success');
+                    console.log('DOM Monitor compatibility layer detected:', window.AIAssistantDOMMonitor);
+                    
+                    // Test a basic function
+                    try {
+                        const stats = window.AIAssistantDOMMonitor.getStats();
+                        console.log('DOM Monitor stats:', stats);
+                    } catch (error) {
+                        console.error('Error getting DOM Monitor stats:', error);
+                    }
+                } else {
+                    addStatus('⚠️ DOM Monitor compatibility layer not found', 'warning');
+                }
+            } else {
+                addStatus('❌ DOM Monitor V2 not loaded', 'error');
+            }
+        }
+        
+        function testHelper() {
+            if (window.AIAssistantHelper) {
+                addStatus('✅ Assistant Helper is loaded!', 'success');
+                console.log('Assistant Helper detected:', window.AIAssistantHelper);
+            } else {
+                addStatus('❌ Assistant Helper not loaded', 'error');
+            }
+        }
+        
+        // Monitor loading progress
+        setTimeout(() => {
+            console.log('=== 5 second status check ===');
+            testDOMMonitor();
+            testHelper();
+            
+            if (window.DOMMonitor && window.AIAssistantDOMMonitor && window.AIAssistantHelper) {
+                addStatus('🎉 All components loaded successfully!', 'success');
+            } else {
+                addStatus('⚠️ Some components failed to load', 'warning');
+            }
+        }, 5000);
+        
+        // Initial status
+        addStatus('🔄 Loading assistant-loader.js...', 'info');
+    </script>
+
+    <!-- Load the assistant loader with our fixes -->
+    <script src="assistant-loader.js"></script>
+</body>
+</html> 

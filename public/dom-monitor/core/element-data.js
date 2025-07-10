@@ -51,7 +51,7 @@
       const tag = this.element.tagName.toLowerCase()
       const id = this.element.id || ''
       
-      // Enhanced CSS class filtering
+      // Enhanced CSS class filtering  
       const allClasses = Array.from(this.element.classList)
       const meaningfulClasses = allClasses
         .filter(cls => 
@@ -63,17 +63,101 @@
         .join('.')
       
       const text = this.getElementText().slice(0, 20).replace(/[^a-zA-Z0-9]/g, '')
-      const position = this.getElementPosition()
       
-      const baseId = `${tag}_${id}_${meaningfulClasses}_${text}_${position.x}_${position.y}`
+      // CRITICAL FIX: Use stable attributes instead of position
+      const stableAttrs = []
+      
+      // Add data attributes for uniqueness (common in test elements)
+      const dataAttrs = ['data-test', 'data-testid', 'data-qa']
+      for (const attr of dataAttrs) {
+        const value = this.element.getAttribute(attr)
+        if (value) {
+          stableAttrs.push(value.replace(/[^a-zA-Z0-9]/g, '_'))
+        }
+      }
+      
+      // Add name attribute if present
+      if (this.element.name) {
+        stableAttrs.push(this.element.name.replace(/[^a-zA-Z0-9]/g, '_'))
+      }
+      
+      // Add href for links (without full URL)
+      if (this.element.href && this.element.tagName.toLowerCase() === 'a') {
+        const href = this.element.getAttribute('href') || ''
+        stableAttrs.push(href.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 20))
+      }
+      
+      // Create a stable unique identifier using DOM-tree position instead of pixel position
+      const treePosition = this.getStableTreePosition()
+      
+      const stableIdentifier = stableAttrs.length > 0 ? stableAttrs.join('_') : `tree_${treePosition}`
+      
+      const baseId = `${tag}_${id}_${meaningfulClasses}_${text}_${stableIdentifier}`
         .replace(/[^a-zA-Z0-9_]/g, '_')
         .replace(/_+/g, '_')
       
-      const elementHash = this.element.outerHTML ? 
-        this.element.outerHTML.slice(0, 50).replace(/[^a-zA-Z0-9]/g, '').slice(-8) : 
-        Math.random().toString(36).slice(-6)
+      // Use a stable hash based on element structure, not outerHTML which can change
+      const elementHash = this.generateStableHash()
       
       return `${baseId}_${elementHash}`.slice(0, 100)
+    }
+
+    // NEW: Generate stable tree-based position that doesn't change when element is detached
+    getStableTreePosition() {
+      try {
+        let position = 0
+        let current = this.element
+        
+        // Walk up the tree and create a stable position identifier
+        while (current && current.parentNode) {
+          const siblings = Array.from(current.parentNode.children || [])
+          const index = siblings.indexOf(current)
+          position = position * 1000 + index // Use large multiplier to avoid collisions
+          current = current.parentNode
+          
+          // Limit depth to avoid overly long identifiers
+          if (position > 999999) break
+        }
+        
+        return Math.abs(position) % 999999 // Keep it manageable
+        
+      } catch (error) {
+        // Fallback to a simple counter if tree walking fails
+        return Math.floor(Math.random() * 999999)
+      }
+    }
+
+    // NEW: Generate stable hash that doesn't depend on DOM state
+    generateStableHash() {
+      try {
+        // Use only stable element properties for hashing
+        const stableProps = [
+          this.element.tagName,
+          this.element.id || '',
+          this.element.className || '',
+          this.element.name || '',
+          this.element.type || '',
+          this.element.getAttribute('data-test') || '',
+          this.element.getAttribute('data-testid') || '',
+          this.getElementText().slice(0, 30)
+        ].filter(prop => prop && prop.length > 0)
+        
+        const stableString = stableProps.join('|')
+        
+        // Simple hash function
+        let hash = 0
+        for (let i = 0; i < stableString.length; i++) {
+          const char = stableString.charCodeAt(i)
+          hash = ((hash << 5) - hash) + char
+          hash = hash & hash // Convert to 32-bit integer
+        }
+        
+        return Math.abs(hash).toString(36).slice(-6)
+        
+      } catch (error) {
+        // Fallback to random if hashing fails
+        return Math.random().toString(36).slice(-6)
+      }
     }
 
     getElementText() {
@@ -233,22 +317,35 @@
     }
 
     checkVisibility() {
-      // CRITICAL FIX: Corrected the logic - only return false if display is 'none' AND no offsetParent
+      // Be more lenient with visibility checks - only exclude clearly hidden elements
       if (this.element.style.display === 'none') return false
       if (this.element.style.visibility === 'hidden') return false
       if (this.element.style.opacity === '0') return false
       
-      // Special case: if element has no offsetParent but is not display:none, 
-      // it might be positioned absolutely/fixed or be the body element - check rect
+      try {
       const rect = this.element.getBoundingClientRect()
       const hasSize = rect.width > 0 && rect.height > 0
       
-      // If no offsetParent but has size, it's likely positioned and still visible
-      if (!this.element.offsetParent) {
-        return hasSize && this.element !== document.body
+        // If element has size, consider it visible regardless of offsetParent
+        // This helps with absolutely positioned elements, fixed elements, etc.
+        if (hasSize) {
+          return true
+        }
+        
+        // Even if no size, check if it's a potentially interactive element
+        const tag = this.element.tagName.toLowerCase()
+        const interactiveTags = ['button', 'a', 'input', 'select', 'textarea']
+        if (interactiveTags.includes(tag)) {
+          // Interactive elements might be hidden but should still be considered for interaction
+          return this.element.offsetParent !== null || this.element === document.body
       }
       
       return hasSize
+      } catch (error) {
+        // If there's an error getting bounds, assume it's visible
+        console.warn('DOM Monitor: Error checking visibility:', error)
+        return true
+      }
     }
 
     checkInteractability() {

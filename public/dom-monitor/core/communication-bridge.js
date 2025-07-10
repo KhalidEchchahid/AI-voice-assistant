@@ -83,6 +83,20 @@
       this.messageHandlers.set('forceRescan', this.handleForceRescan.bind(this))
       this.messageHandlers.set('cleanup', this.handleCleanup.bind(this))
       this.messageHandlers.set('updateConfig', this.handleUpdateConfig.bind(this))
+      
+      // NEW: Category-based endpoints for classification system
+      this.messageHandlers.set('getByCategory', this.handleGetByCategory.bind(this))
+      this.messageHandlers.set('getClickableElements', this.handleGetClickableElements.bind(this))
+      this.messageHandlers.set('getFormElements', this.handleGetFormElements.bind(this))
+      this.messageHandlers.set('getNavigationElements', this.handleGetNavigationElements.bind(this))
+      this.messageHandlers.set('getMediaElements', this.handleGetMediaElements.bind(this))
+      this.messageHandlers.set('getInteractiveElements', this.handleGetInteractiveElements.bind(this))
+      this.messageHandlers.set('getClassificationSummary', this.handleGetClassificationSummary.bind(this))
+      
+      // NEW: Cache maintenance endpoints
+      this.messageHandlers.set('verifyCache', this.handleVerifyCache.bind(this))
+      this.messageHandlers.set('refreshCache', this.handleRefreshCache.bind(this))
+      this.messageHandlers.set('getCacheDebugInfo', this.handleGetCacheDebugInfo.bind(this))
     }
 
     // Start listening for messages
@@ -203,13 +217,167 @@
           return
         }
         
+        console.log(`🔍 Communication Bridge: Finding elements for intent '${intent}'`)
+        
+        // Use enhanced cache with classification system
         const elements = await this.elementCache.findByIntent(intent, options)
         const response = {
           success: true,
           elements,
           total: elements.length,
           intent,
+          options,
+          cacheSize: this.elementCache.cache.elements.size,
+          cacheType: 'classification-enhanced'
+        }
+        
+        await this.sendResponse(requestId, response)
+        
+      } catch (error) {
+        console.error('Communication Bridge: Error in findElements:', error)
+        await this.sendErrorResponse(requestId, error.message)
+      }
+    }
+
+    // NEW: Category-based handlers
+    async handleGetByCategory(data, requestId) {
+      try {
+        const { category, options = {} } = data
+        
+        if (!category || typeof category !== 'string') {
+          await this.sendErrorResponse(requestId, 'Invalid category parameter')
+          return
+        }
+        
+        console.log(`🎯 Communication Bridge: Getting elements by category '${category}'`)
+        
+        const elements = await this.elementCache.findByCategory(category, options)
+        const response = {
+          success: true,
+          elements,
+          total: elements.length,
+          category,
+          options,
+          cacheSize: this.elementCache.cache.elements.size
+        }
+        
+        await this.sendResponse(requestId, response)
+        
+      } catch (error) {
+        console.error('Communication Bridge: Error in getByCategory:', error)
+        await this.sendErrorResponse(requestId, error.message)
+      }
+    }
+
+    async handleGetClickableElements(data, requestId) {
+      try {
+        const { options = {} } = data
+        const elements = await this.elementCache.findByCategory('clickable', options)
+        
+        const response = {
+          success: true,
+          elements,
+          total: elements.length,
+          category: 'clickable',
           options
+        }
+        
+        await this.sendResponse(requestId, response)
+        
+      } catch (error) {
+        await this.sendErrorResponse(requestId, error.message)
+      }
+    }
+
+    async handleGetFormElements(data, requestId) {
+      try {
+        const { options = {} } = data
+        const elements = await this.elementCache.findByCategory('typeable', options)
+        
+        const response = {
+          success: true,
+          elements,
+          total: elements.length,
+          category: 'form/typeable',
+          options
+        }
+        
+        await this.sendResponse(requestId, response)
+        
+      } catch (error) {
+        await this.sendErrorResponse(requestId, error.message)
+      }
+    }
+
+    async handleGetNavigationElements(data, requestId) {
+      try {
+        const { options = {} } = data
+        const elements = await this.elementCache.findByCategory('navigation', options)
+        
+        const response = {
+          success: true,
+          elements,
+          total: elements.length,
+          category: 'navigation',
+          options
+        }
+        
+        await this.sendResponse(requestId, response)
+        
+      } catch (error) {
+        await this.sendErrorResponse(requestId, error.message)
+      }
+    }
+
+    async handleGetMediaElements(data, requestId) {
+      try {
+        const { options = {} } = data
+        const elements = await this.elementCache.findByCategory('media', options)
+        
+        const response = {
+          success: true,
+          elements,
+          total: elements.length,
+          category: 'media',
+          options
+        }
+        
+        await this.sendResponse(requestId, response)
+        
+      } catch (error) {
+        await this.sendErrorResponse(requestId, error.message)
+      }
+    }
+
+    async handleGetInteractiveElements(data, requestId) {
+      try {
+        const { options = {} } = data
+        const elements = await this.elementCache.findByCategory('interactive', options)
+        
+        const response = {
+          success: true,
+          elements,
+          total: elements.length,
+          category: 'interactive',
+          options
+        }
+        
+        await this.sendResponse(requestId, response)
+        
+      } catch (error) {
+        await this.sendErrorResponse(requestId, error.message)
+      }
+    }
+
+    async handleGetClassificationSummary(data, requestId) {
+      try {
+        const summary = this.elementCache.getClassificationSummary()
+        
+        const response = {
+          success: true,
+          summary,
+          totalElements: this.elementCache.cache.elements.size,
+          timestamp: Date.now()
         }
         
         await this.sendResponse(requestId, response)
@@ -228,7 +396,8 @@
           success: true,
           elements,
           total: elements.length,
-          filter
+          filter,
+          cacheSize: this.elementCache.cache.elements.size
         }
         
         await this.sendResponse(requestId, response)
@@ -266,7 +435,8 @@
           success: true,
           message: 'pong',
           timestamp: Date.now(),
-          version: '2.0.0'
+          version: '2.0.0',
+          cacheSize: this.elementCache?.cache?.elements?.size || 0
         }
         
         await this.sendResponse(requestId, response)
@@ -278,32 +448,51 @@
 
     async handleForceRescan(data, requestId) {
       try {
+        console.log("🔄 Communication Bridge: Starting force rescan...")
+        
         // Clear cache and force rescan
         this.elementCache.clear()
         
-        // Re-scan DOM
+        // Re-scan DOM - trigger a full rescan
         const elements = document.querySelectorAll(
-          'button, a, input, select, textarea, form, [role="button"], [tabindex], [onclick], [data-testid]'
+          'button, a, input, select, textarea, form, [role="button"], [tabindex], [onclick], [data-testid], .btn, .button, .clickable'
         )
         
         let addedCount = 0
+        let skippedCount = 0
+        
+        console.log(`🔄 Communication Bridge: Processing ${elements.length} elements for rescan`)
+        
         for (const element of elements) {
-          const elementId = await this.elementCache.addElement(element)
-          if (elementId) {
-            addedCount++
+          try {
+            const elementId = await this.elementCache.addElement(element)
+            if (elementId) {
+              addedCount++
+            } else {
+              skippedCount++
+            }
+          } catch (error) {
+            skippedCount++
+            console.warn("Communication Bridge: Error during rescan:", error)
           }
         }
         
         const response = {
           success: true,
           message: 'DOM rescanned successfully',
+          elementsProcessed: elements.length,
           elementsAdded: addedCount,
-          totalElements: this.elementCache.getStats().totalElements
+          elementsSkipped: skippedCount,
+          totalElements: this.elementCache.cache.elements.size,
+          classifications: this.elementCache.getClassificationSummary()
         }
+        
+        console.log(`✅ Communication Bridge: Rescan complete - Added: ${addedCount}, Skipped: ${skippedCount}`)
         
         await this.sendResponse(requestId, response)
         
       } catch (error) {
+        console.error("Communication Bridge: Error during force rescan:", error)
         await this.sendErrorResponse(requestId, error.message)
       }
     }
@@ -349,6 +538,87 @@
           success: true,
           message: 'Configuration updated',
           config: this.config
+        }
+        
+        await this.sendResponse(requestId, response)
+        
+      } catch (error) {
+        await this.sendErrorResponse(requestId, error.message)
+      }
+    }
+
+    async handleVerifyCache(data, requestId) {
+      try {
+        console.log("🔍 Communication Bridge: Starting cache verification...")
+        
+        const result = this.elementCache.verifyAndCleanCache()
+        
+        const response = {
+          success: true,
+          message: 'Cache verification completed',
+          ...result,
+          timestamp: Date.now()
+        }
+        
+        await this.sendResponse(requestId, response)
+        
+      } catch (error) {
+        console.error("Communication Bridge: Error during cache verification:", error)
+        await this.sendErrorResponse(requestId, error.message)
+      }
+    }
+
+    async handleRefreshCache(data, requestId) {
+      try {
+        console.log("🔄 Communication Bridge: Starting cache refresh...")
+        
+        const result = await this.elementCache.forceRefresh()
+        
+        const response = {
+          success: true,
+          message: 'Cache refresh completed',
+          ...result,
+          timestamp: Date.now()
+        }
+        
+        await this.sendResponse(requestId, response)
+        
+      } catch (error) {
+        console.error("Communication Bridge: Error during cache refresh:", error)
+        await this.sendErrorResponse(requestId, error.message)
+      }
+    }
+
+    async handleGetCacheDebugInfo(data, requestId) {
+      try {
+        const cacheStats = this.elementCache.getStats()
+        const classificationSummary = this.elementCache.getClassificationSummary()
+        
+        // Sample some cached elements for debugging
+        const sampleElements = []
+        let count = 0
+        for (const [elementId, data] of this.elementCache.cache.elements.entries()) {
+          if (count >= 5) break
+          
+          sampleElements.push({
+            elementId,
+            tag: data.basicData.tagName,
+            text: data.basicData.text?.slice(0, 50) || '',
+            className: data.basicData.attributes?.className || '',
+            inDOM: document.contains(data.element),
+            visible: data.basicData.visibility,
+            interactable: data.basicData.interactable
+          })
+          count++
+        }
+        
+        const response = {
+          success: true,
+          cacheStats,
+          classificationSummary,
+          sampleElements,
+          totalCacheSize: this.elementCache.cache.elements.size,
+          timestamp: Date.now()
         }
         
         await this.sendResponse(requestId, response)
@@ -549,29 +819,33 @@
       return Math.round(handlerOverhead + queueOverhead + pendingOverhead)
     }
 
-    // Cleanup and reset
+    // Improved cleanup with less frequent execution
     cleanup() {
-      // Clear pending requests
-      this.pendingRequests.clear()
+      // FIXED: Only do light cleanup, not full shutdown
+      const now = Date.now()
       
-      // Clear message queue
-      this.messageQueue = []
-      
-      // Reset stats
-      this.stats = {
-        totalMessages: 0,
-        successfulMessages: 0,
-        failedMessages: 0,
-        averageResponseTime: 0,
-        totalResponseTime: 0,
-        messagesSent: 0,
-        messagesReceived: 0,
-        lastMessageTime: 0
+      // Only cleanup if it's been more than 30 seconds since last cleanup
+      if (this.lastCleanupTime && (now - this.lastCleanupTime < 30000)) {
+        return
       }
+      
+      this.lastCleanupTime = now
+      
+      // Clear pending requests that are too old
+      for (const [requestId, timestamp] of this.pendingRequests.entries()) {
+        if (now - timestamp > this.config.maxResponseTime) {
+          this.pendingRequests.delete(requestId)
+        }
+      }
+      
+      // Clear old messages from queue
+      this.messageQueue = this.messageQueue.filter(msg => 
+        (now - msg.timestamp) < this.config.maxResponseTime
+      )
       
       this.isProcessing = false
       
-      console.log("DOM Monitor: Communication Bridge cleaned up")
+      console.log("🧹 DOM Monitor: Communication Bridge light cleanup completed")
     }
 
     // Advanced features

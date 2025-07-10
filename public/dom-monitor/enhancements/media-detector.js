@@ -540,7 +540,8 @@
       if (!this.elementCache) return
       
       const elementId = this.generateElementId(element)
-      const cachedElement = this.elementCache.cache.get(elementId)
+      // FIXED: Update cache reference to use new structure
+      const cachedElement = this.elementCache.cache.elements.get(elementId)
       
       if (cachedElement) {
         cachedElement.mediaData = mediaData

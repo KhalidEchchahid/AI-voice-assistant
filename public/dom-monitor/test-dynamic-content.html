@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM Monitor Dynamic Content Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+        }
+        .button {
+            background: #007cba;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .results {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .dynamic-content {
+            border: 1px dashed #999;
+            padding: 10px;
+            margin: 10px 0;
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>DOM Monitor Dynamic Content Test</h1>
+    
+    <div class="test-section">
+        <h2>Classification System Test</h2>
+        <button class="button" onclick="testClassifications()">Test Classifications</button>
+        <button class="button" onclick="testCategories()">Test Categories</button>
+        <div id="classification-results" class="results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Dynamic Content Test</h2>
+        <button class="button" onclick="addElements()">Add Elements</button>
+        <button class="button" onclick="removeElements()">Remove Elements</button>
+        <button class="button" onclick="testMutations()">Test Mutations</button>
+        <button class="button" onclick="testIDConsistency()">Test ID Consistency</button>
+        <div id="dynamic-container" class="dynamic-content">
+            <!-- Dynamic elements will be added/removed here -->
+        </div>
+        <div id="dynamic-results" class="results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Cache Performance Test</h2>
+        <button class="button" onclick="performanceTest()">Run Performance Test</button>
+        <button class="button" onclick="clearCache()">Refresh Cache</button>
+        <button class="button" onclick="verifyCache()">Verify Cache</button>
+        <button class="button" onclick="getDebugInfo()">Get Debug Info</button>
+        <div id="performance-results" class="results"></div>
+    </div>
+
+    <!-- Load DOM Monitor -->
+    <script src="./dom-monitor.js"></script>
+
+    <script>
+        let testElementCounter = 0;
+        let performanceResults = [];
+
+        // Wait for DOM Monitor to initialize
+        async function waitForDOMMonitor() {
+            let attempts = 0;
+            while (!window.DOMMonitor && attempts < 50) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                attempts++;
+            }
+            
+            if (window.DOMMonitor) {
+                if (!window.DOMMonitor.isReady()) {
+                    console.log("DOM Monitor not ready, initializing...");
+                    await window.DOMMonitor.initialize();
+                }
+                return true;
+            }
+            return false;
+        }
+
+        async function testClassifications() {
+            const resultsDiv = document.getElementById('classification-results');
+            resultsDiv.textContent = 'Testing classifications...';
+            
+            try {
+                const ready = await waitForDOMMonitor();
+                if (!ready) {
+                    resultsDiv.textContent = 'Error: DOM Monitor not available';
+                    return;
+                }
+
+                // Test different category requests
+                const categories = [
+                    'clickable',
+                    'typeable', 
+                    'navigation',
+                    'buttons',
+                    'interactive'
+                ];
+
+                let results = 'Classification Test Results:\n\n';
+                
+                for (const category of categories) {
+                    try {
+                        const elements = await window.DOMMonitor.findElements(category);
+                        results += `${category}: ${elements.length} elements found\n`;
+                        if (elements.length > 0) {
+                            results += `  Sample: ${elements[0].element.tagName} - "${elements[0].element.text?.slice(0, 30) || 'no text'}"\n`;
+                        }
+                    } catch (error) {
+                        results += `${category}: Error - ${error.message}\n`;
+                    }
+                }
+
+                // Get classification summary
+                const stats = window.DOMMonitor.getStats();
+                if (stats.cache && stats.cache.classifications) {
+                    results += '\nClassification Summary:\n';
+                    Object.entries(stats.cache.classifications).forEach(([key, value]) => {
+                        results += `  ${key}: ${value}\n`;
+                    });
+                }
+
+                resultsDiv.textContent = results;
+                
+            } catch (error) {
+                resultsDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function testCategories() {
+            const resultsDiv = document.getElementById('classification-results');
+            resultsDiv.textContent = 'Testing category endpoints...';
+            
+            try {
+                const ready = await waitForDOMMonitor();
+                if (!ready) {
+                    resultsDiv.textContent = 'Error: DOM Monitor not available';
+                    return;
+                }
+
+                // Test new category-based methods
+                const tests = [
+                    { name: 'Get All Interactive', method: () => window.DOMMonitor.findElements('get_all_interactive') },
+                    { name: 'Get Clickable Elements', method: () => window.DOMMonitor.findElements('get_clickable_elements') },
+                    { name: 'Get Form Elements', method: () => window.DOMMonitor.findElements('get_form_elements') },
+                    { name: 'Get Navigation Elements', method: () => window.DOMMonitor.findElements('get_navigation_elements') }
+                ];
+
+                let results = 'Category Endpoint Test Results:\n\n';
+                
+                for (const test of tests) {
+                    try {
+                        const startTime = performance.now();
+                        const elements = await test.method();
+                        const endTime = performance.now();
+                        
+                        results += `${test.name}:\n`;
+                        results += `  Found: ${elements.length} elements\n`;
+                        results += `  Time: ${(endTime - startTime).toFixed(2)}ms\n`;
+                        if (elements.length > 0) {
+                            results += `  Sample: ${elements[0].element.tagName} - "${elements[0].element.text?.slice(0, 30) || 'no text'}"\n`;
+                        }
+                        results += '\n';
+                    } catch (error) {
+                        results += `${test.name}: Error - ${error.message}\n\n`;
+                    }
+                }
+
+                resultsDiv.textContent = results;
+                
+            } catch (error) {
+                resultsDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function addElements() {
+            const container = document.getElementById('dynamic-container');
+            const resultsDiv = document.getElementById('dynamic-results');
+            
+            try {
+                const ready = await waitForDOMMonitor();
+                if (!ready) {
+                    resultsDiv.textContent = 'Error: DOM Monitor not available';
+                    return;
+                }
+
+                // Get initial cache size
+                const initialStats = window.DOMMonitor.getStats();
+                const initialSize = initialStats.cache?.totalElements || 0;
+
+                // Add various types of elements with unique identifiers
+                const timestamp = Date.now();
+                const elementsToAdd = [
+                    { tag: 'button', text: `Dynamic Button ${timestamp}`, className: 'btn dynamic-element', 'data-test': `btn-${timestamp}` },
+                    { tag: 'a', text: `Dynamic Link ${timestamp}`, href: '#', className: 'dynamic-element', 'data-test': `link-${timestamp}` },
+                    { tag: 'input', type: 'text', placeholder: `Dynamic Input ${timestamp}`, className: 'dynamic-element', 'data-test': `input-${timestamp}` },
+                    { tag: 'select', className: 'dynamic-element', 'data-test': `select-${timestamp}`, options: ['Option 1', 'Option 2'] },
+                    { tag: 'div', text: `Dynamic Content ${timestamp}`, className: 'clickable dynamic-element', onclick: 'alert("clicked")', 'data-test': `div-${timestamp}` }
+                ];
+
+                console.log(`Adding ${elementsToAdd.length} elements with timestamp ${timestamp}`);
+
+                elementsToAdd.forEach(elementData => {
+                    const element = document.createElement(elementData.tag);
+                    if (elementData.text) element.textContent = elementData.text;
+                    if (elementData.className) element.className = elementData.className;
+                    if (elementData.href) element.href = elementData.href;
+                    if (elementData.type) element.type = elementData.type;
+                    if (elementData.placeholder) element.placeholder = elementData.placeholder;
+                    if (elementData.onclick) element.setAttribute('onclick', elementData.onclick);
+                    if (elementData['data-test']) element.setAttribute('data-test', elementData['data-test']);
+                    
+                    if (elementData.options) {
+                        elementData.options.forEach(optionText => {
+                            const option = document.createElement('option');
+                            option.textContent = optionText;
+                            option.value = optionText.toLowerCase();
+                            element.appendChild(option);
+                        });
+                    }
+                    
+                    container.appendChild(element);
+                });
+
+                // Wait longer for DOM Monitor to process the changes
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Get updated cache size
+                const updatedStats = window.DOMMonitor.getStats();
+                const updatedSize = updatedStats.cache?.totalElements || 0;
+
+                console.log(`Elements added. Cache size: ${initialSize} → ${updatedSize} (+${updatedSize - initialSize})`);
+
+                // Test if new elements are being detected
+                const clickableElements = await window.DOMMonitor.findElements('clickable');
+                const dynamicClickable = clickableElements.filter(el => 
+                    el.element.className && el.element.className.includes('dynamic-element')
+                );
+                
+                console.log(`Dynamic clickable elements detected: ${dynamicClickable.length}`);
+
+                return {
+                    added: elementsToAdd.length,
+                    cacheIncrease: updatedSize - initialSize,
+                    dynamicDetected: dynamicClickable.length
+                };
+
+            } catch (error) {
+                console.error('Error in addElements:', error);
+                throw error;
+            }
+        }
+
+        async function removeElements() {
+            const container = document.getElementById('dynamic-container');
+            const resultsDiv = document.getElementById('dynamic-results');
+            
+            try {
+                const ready = await waitForDOMMonitor();
+                if (!ready) {
+                    resultsDiv.textContent = 'Error: DOM Monitor not available';
+                    return;
+                }
+
+                // Get initial cache size
+                const initialStats = window.DOMMonitor.getStats();
+                const initialSize = initialStats.cache?.totalElements || 0;
+
+                // Remove all dynamic elements
+                const dynamicElements = container.querySelectorAll('.dynamic-element');
+                const removedCount = dynamicElements.length;
+                
+                console.log(`Removing ${removedCount} elements from DOM`);
+                
+                dynamicElements.forEach(element => {
+                    console.log(`Removing element: ${element.tagName} with data-test: ${element.getAttribute('data-test')}`);
+                    element.remove();
+                });
+
+                // Wait longer for DOM Monitor to process the removals
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Get updated cache size
+                const updatedStats = window.DOMMonitor.getStats();
+                const updatedSize = updatedStats.cache?.totalElements || 0;
+
+                console.log(`Elements removed. Cache size: ${initialSize} → ${updatedSize} (${updatedSize - initialSize})`);
+
+                return {
+                    removed: removedCount,
+                    cacheDecrease: initialSize - updatedSize
+                };
+
+            } catch (error) {
+                console.error('Error in removeElements:', error);
+                throw error;
+            }
+        }
+
+        async function testMutations() {
+            const resultsDiv = document.getElementById('dynamic-results');
+            
+            try {
+                const ready = await waitForDOMMonitor();
+                if (!ready) {
+                    resultsDiv.textContent = 'Error: DOM Monitor not available';
+                    return;
+                }
+
+                resultsDiv.textContent = 'Testing rapid mutations with debug info...';
+
+                let results = 'Rapid Mutation Test with Debug Info:\n\n';
+                
+                // Get initial state
+                const initialStats = window.DOMMonitor.getStats();
+                results += `Initial cache size: ${initialStats.cache?.totalElements || 0}\n`;
+                
+                // Verify cache before starting
+                const preVerification = await window.DOMMonitor.verifyCache();
+                results += `Pre-test verification: ${preVerification.staleFound} stale elements removed\n\n`;
+
+                // Rapid addition and removal with detailed tracking
+                for (let i = 0; i < 3; i++) {
+                    results += `--- Iteration ${i + 1} ---\n`;
+                    
+                    // Add elements
+                    await addElements();
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    const afterAddStats = window.DOMMonitor.getStats();
+                    results += `After add: ${afterAddStats.cache?.totalElements || 0} elements\n`;
+                    
+                    // Remove elements
+                    await removeElements();
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    const afterRemoveStats = window.DOMMonitor.getStats();
+                    results += `After remove: ${afterRemoveStats.cache?.totalElements || 0} elements\n`;
+                    
+                    // Verify cache after each iteration
+                    const verification = await window.DOMMonitor.verifyCache();
+                    results += `Verification: ${verification.staleFound} stale elements cleaned\n`;
+                    results += `Final iteration size: ${verification.remaining} elements\n\n`;
+                }
+
+                const finalStats = window.DOMMonitor.getStats();
+                
+                results += 'Final Test Results:\n';
+                results += `Final cache size: ${finalStats.cache?.totalElements || 0}\n`;
+                results += `Cache hits: ${finalStats.cache?.cacheHits || 0}\n`;
+                results += `Cache misses: ${finalStats.cache?.cacheMisses || 0}\n`;
+                
+                // Get debug info
+                const debugInfo = await window.DOMMonitor.getCacheDebugInfo();
+                if (debugInfo.sampleElements && debugInfo.sampleElements.length > 0) {
+                    results += '\nSample cached elements:\n';
+                    debugInfo.sampleElements.forEach(el => {
+                        results += `  ${el.tag} - "${el.text}" - inDOM: ${el.inDOM}\n`;
+                    });
+                }
+
+                resultsDiv.textContent = results;
+
+            } catch (error) {
+                resultsDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function performanceTest() {
+            const resultsDiv = document.getElementById('performance-results');
+            resultsDiv.textContent = 'Running performance test...';
+            
+            try {
+                const ready = await waitForDOMMonitor();
+                if (!ready) {
+                    resultsDiv.textContent = 'Error: DOM Monitor not available';
+                    return;
+                }
+
+                const testCategories = ['clickable', 'typeable', 'navigation', 'interactive', 'buttons'];
+                const iterations = 10;
+                const results = [];
+
+                for (const category of testCategories) {
+                    const times = [];
+                    
+                    for (let i = 0; i < iterations; i++) {
+                        const startTime = performance.now();
+                        const elements = await window.DOMMonitor.findElements(category);
+                        const endTime = performance.now();
+                        times.push(endTime - startTime);
+                    }
+                    
+                    const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+                    const minTime = Math.min(...times);
+                    const maxTime = Math.max(...times);
+                    
+                    results.push({
+                        category,
+                        avgTime: avgTime.toFixed(2),
+                        minTime: minTime.toFixed(2),
+                        maxTime: maxTime.toFixed(2),
+                        elementCount: (await window.DOMMonitor.findElements(category)).length
+                    });
+                }
+
+                let output = 'Performance Test Results:\n\n';
+                results.forEach(result => {
+                    output += `${result.category}:\n`;
+                    output += `  Elements: ${result.elementCount}\n`;
+                    output += `  Avg Time: ${result.avgTime}ms\n`;
+                    output += `  Min Time: ${result.minTime}ms\n`;
+                    output += `  Max Time: ${result.maxTime}ms\n\n`;
+                });
+
+                const stats = window.DOMMonitor.getStats();
+                output += `Cache Status:\n`;
+                output += `  Total Elements: ${stats.cache?.totalElements || 0}\n`;
+                output += `  Memory Usage: ${stats.cache?.memoryUsage || 0}KB\n`;
+
+                resultsDiv.textContent = output;
+
+            } catch (error) {
+                resultsDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function clearCache() {
+            const resultsDiv = document.getElementById('performance-results');
+            
+            try {
+                const ready = await waitForDOMMonitor();
+                if (!ready) {
+                    resultsDiv.textContent = 'Error: DOM Monitor not available';
+                    return;
+                }
+
+                // New: Use cache refresh instead of force rescan
+                const refreshResult = await window.DOMMonitor.refreshCache();
+                
+                let output = `Cache refreshed successfully!\n`;
+                output += `Elements found: ${refreshResult.elementsFound}\n`;
+                output += `Elements added: ${refreshResult.elementsAdded}\n`;
+                output += `Elements skipped: ${refreshResult.elementsSkipped}\n`;
+                output += `Final cache size: ${refreshResult.finalCacheSize}\n\n`;
+                
+                output += `Classifications:\n`;
+                Object.entries(refreshResult.classifications.byAction).forEach(([action, count]) => {
+                    output += `  ${action}: ${count}\n`;
+                });
+
+                resultsDiv.textContent = output;
+
+            } catch (error) {
+                resultsDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // NEW: Add cache verification function
+        async function verifyCache() {
+            const resultsDiv = document.getElementById('performance-results');
+            
+            try {
+                const ready = await waitForDOMMonitor();
+                if (!ready) {
+                    resultsDiv.textContent = 'Error: DOM Monitor not available';
+                    return;
+                }
+
+                const result = await window.DOMMonitor.verifyCache();
+                
+                let output = `Cache Verification Results:\n`;
+                output += `Elements checked: ${result.checked}\n`;
+                output += `Stale elements found: ${result.staleFound}\n`;
+                output += `Elements removed: ${result.removed}\n`;
+                output += `Remaining elements: ${result.remaining}\n`;
+
+                resultsDiv.textContent = output;
+
+            } catch (error) {
+                resultsDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // NEW: Add debug info function
+        async function getDebugInfo() {
+            const resultsDiv = document.getElementById('performance-results');
+            
+            try {
+                const ready = await waitForDOMMonitor();
+                if (!ready) {
+                    resultsDiv.textContent = 'Error: DOM Monitor not available';
+                    return;
+                }
+
+                const debugInfo = await window.DOMMonitor.getCacheDebugInfo();
+                
+                let output = `Cache Debug Information:\n\n`;
+                output += `Total cache size: ${debugInfo.totalCacheSize}\n`;
+                output += `Cache hits: ${debugInfo.cacheStats.cacheHits}\n`;
+                output += `Cache misses: ${debugInfo.cacheStats.cacheMisses}\n\n`;
+                
+                output += `Classifications:\n`;
+                Object.entries(debugInfo.classificationSummary.byAction).forEach(([action, count]) => {
+                    output += `  ${action}: ${count}\n`;
+                });
+                
+                output += `\nSample Elements:\n`;
+                debugInfo.sampleElements.forEach(el => {
+                    output += `  ${el.tag} - "${el.text}" - inDOM: ${el.inDOM} - visible: ${el.visible}\n`;
+                });
+
+                resultsDiv.textContent = output;
+
+            } catch (error) {
+                resultsDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // NEW: Add ID consistency test function
+        async function testIDConsistency() {
+            const resultsDiv = document.getElementById('dynamic-results');
+            resultsDiv.textContent = 'Testing ID consistency...';
+
+            try {
+                const ready = await waitForDOMMonitor();
+                if (!ready) {
+                    resultsDiv.textContent = 'Error: DOM Monitor not available';
+                    return;
+                }
+
+                let results = 'ID Consistency Test Results:\n\n';
+                
+                // Create a test element
+                const testElement = document.createElement('button');
+                testElement.textContent = 'Test ID Consistency';
+                testElement.className = 'test-id-consistency';
+                testElement.setAttribute('data-test', 'id-consistency-test');
+                
+                // Add to DOM and get initial ID
+                const container = document.getElementById('dynamic-container');
+                container.appendChild(testElement);
+                
+                // Simulate the DOM Monitor's ID generation (we'll need access to the internal method)
+                let idWhileAttached, idWhileDetached;
+                
+                try {
+                    // Try to access the ID generation through the element cache
+                    const elementData = new window.DOMMonitorModules.EnhancedElementData(testElement);
+                    idWhileAttached = elementData.generateElementId();
+                    
+                    results += `ID while attached to DOM: ${idWhileAttached}\n`;
+                    
+                    // Remove from DOM
+                    testElement.remove();
+                    
+                    // Generate ID while detached
+                    idWhileDetached = elementData.generateElementId();
+                    
+                    results += `ID while detached from DOM: ${idWhileDetached}\n\n`;
+                    
+                    if (idWhileAttached === idWhileDetached) {
+                        results += '✅ SUCCESS: Element ID is CONSISTENT before and after DOM removal!\n';
+                        results += 'This confirms the position-based ID bug is FIXED.\n';
+                    } else {
+                        results += '❌ FAILURE: Element ID is INCONSISTENT!\n';
+                        results += `Expected: ${idWhileAttached}\n`;
+                        results += `Got: ${idWhileDetached}\n`;
+                        results += 'The position-based ID bug is still present.\n';
+                    }
+                    
+                } catch (error) {
+                    results += `Error during ID generation test: ${error.message}\n`;
+                    
+                    // Fallback: Test with actual cache operations
+                    results += '\nFallback: Testing with actual cache operations...\n';
+                    
+                    // Re-add element
+                    container.appendChild(testElement);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Check initial cache size
+                    const initialStats = window.DOMMonitor.getStats();
+                    const initialSize = initialStats.cache?.totalElements || 0;
+                    
+                    // Force rescan to ensure element is cached
+                    await window.DOMMonitor.refreshCache();
+                    
+                    const afterAddStats = window.DOMMonitor.getStats();
+                    const afterAddSize = afterAddStats.cache?.totalElements || 0;
+                    
+                    // Remove element
+                    testElement.remove();
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Wait for mutation observer
+                    
+                    const afterRemoveStats = window.DOMMonitor.getStats();
+                    const afterRemoveSize = afterRemoveStats.cache?.totalElements || 0;
+                    
+                    results += `Cache size: Initial=${initialSize}, After Add=${afterAddSize}, After Remove=${afterRemoveSize}\n`;
+                    
+                    if (afterRemoveSize <= afterAddSize) {
+                        results += '✅ Cache size decreased or stayed same after removal - likely working correctly\n';
+                    } else {
+                        results += '❌ Cache size INCREASED after removal - ID consistency issue still present\n';
+                    }
+                }
+
+                resultsDiv.textContent = results;
+
+            } catch (error) {
+                resultsDiv.textContent = `Error: ${error.message}\n${error.stack}`;
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('Test page loaded, waiting for DOM Monitor...');
+            const ready = await waitForDOMMonitor();
+            if (ready) {
+                console.log('DOM Monitor ready for testing');
+                document.getElementById('classification-results').textContent = 'DOM Monitor ready. Click "Test Classifications" to begin.';
+            } else {
+                console.error('DOM Monitor failed to initialize');
+                document.getElementById('classification-results').textContent = 'Error: DOM Monitor failed to initialize';
+            }
+        });
+    </script>
+</body>
+</html> 

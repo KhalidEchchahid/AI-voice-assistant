@@ -45,8 +45,11 @@
 
     // Helper to check debug mode
     isDebugMode() {
+      // Enable debug mode if explicitly set or if we're in development
       return this.config.debugMode || 
-             (window.DOMMonitor && window.DOMMonitor.config && window.DOMMonitor.config.debugMode)
+             window.location.hostname === 'localhost' || 
+             window.location.hostname === '127.0.0.1' ||
+             window.location.search.includes('debug=true')
     }
 
     // Helper to check if element is relevant for caching
@@ -141,16 +144,28 @@
         return
       }
       
-      this.isObserving = true
-      
-      // Begin tracking existing elements
-      this.observeExistingElements()
-      
-      console.log("✅ DOM Monitor: Started observing DOM changes")
+      // FIXED: Add error handling to prevent observer from stopping
+      try {
+        this.isObserving = true
+        
+        // Begin tracking existing elements
+        this.observeExistingElements()
+        
+        console.log("✅ DOM Monitor: Started observing DOM changes")
+      } catch (error) {
+        console.error("❌ DOM Monitor: Error starting observation:", error)
+        this.isObserving = false
+      }
     }
 
     // Stop observing
     stopObserving() {
+      if (!this.isObserving) {
+        return
+      }
+      
+      console.log("DOM Monitor: Stopping DOM observation...")
+      
       this.isObserving = false
       
       if (this.mutationObserver) {
@@ -173,25 +188,41 @@
 
     // Handle mutation events with performance budgeting
     async handleMutations(mutations) {
-      if (!this.isObserving || !this.performanceManager) {
+      // FIXED: Add robust error handling to prevent observer from stopping
+      if (!this.isObserving) {
+        console.log("DOM Monitor: Ignoring mutations - not observing")
         return
       }
       
-      const processingOperation = async () => {
-        return this._processMutations(mutations)
+      if (!this.elementCache) {
+        console.warn("DOM Monitor: No element cache available for mutations")
+        return
       }
       
-      const result = await this.performanceManager.executeWithBudget(
-        processingOperation,
-        32, // Max 32ms for mutation processing
-        'handleMutations'
-      )
-      
-      if (result.throttled) {
-        this.stats.throttledOperations++
-        // Queue for later processing
-        this.mutationQueue.push(...mutations)
-        this.processThrottled()
+      try {
+        const processingOperation = async () => {
+          return this._processMutations(mutations)
+        }
+        
+        if (this.performanceManager) {
+          const result = await this.performanceManager.executeWithBudget(
+            processingOperation,
+            32, // Max 32ms for mutation processing
+            'handleMutations'
+          )
+          
+          if (result.throttled) {
+            this.stats.throttledOperations++
+            // Queue for later processing
+            this.mutationQueue.push(...mutations)
+            this.processThrottled()
+          }
+        } else {
+          await processingOperation()
+        }
+      } catch (error) {
+        console.warn("DOM Monitor: Error handling mutations (continuing):", error)
+        // Don't stop observing on error, just log and continue
       }
     }
 
@@ -203,10 +234,12 @@
       const limitedMutations = mutations.slice(0, this.config.maxMutationsPerBatch)
       
       for (const mutation of limitedMutations) {
+        // FIXED: Add per-mutation error handling
         try {
           await this.processSingleMutation(mutation, processedElements)
         } catch (error) {
-          console.warn('DOM Monitor: Error processing mutation:', error)
+          console.warn('DOM Monitor: Error processing single mutation (continuing):', error)
+          // Continue processing other mutations
         }
       }
       
@@ -214,6 +247,10 @@
       this.stats.processingTime += processingTime
       this.stats.totalMutations += limitedMutations.length
       this.stats.lastProcessTime = Date.now()
+      
+      if (this.isDebugMode() && processedElements.size > 0) {
+        console.debug(`🔄 DOM Monitor: Processed ${limitedMutations.length} mutations, updated ${processedElements.size} elements`)
+      }
       
       return {
         processed: limitedMutations.length,
@@ -223,138 +260,251 @@
     }
 
     async processSingleMutation(mutation, processedElements) {
-      const { type, target, addedNodes, removedNodes, attributeName } = mutation
+      // IMPROVED: More robust mutation handling with better logging
+      if (this.isDebugMode()) {
+        console.debug(`🔄 DOM Monitor: Processing mutation`, {
+          type: mutation.type,
+          target: mutation.target.tagName,
+          addedNodes: mutation.addedNodes.length,
+          removedNodes: mutation.removedNodes.length
+        })
+      }
       
-      switch (type) {
+      switch (mutation.type) {
         case 'childList':
-          await this.handleChildListMutation(addedNodes, removedNodes, processedElements)
+          // Handle added nodes
+          if (mutation.addedNodes.length > 0) {
+            for (const node of mutation.addedNodes) {
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                await this.processAddedElement(node, processedElements)
+              }
+            }
+          }
+          
+          // Handle removed nodes - IMPROVED: More thorough removal
+          if (mutation.removedNodes.length > 0) {
+            for (const node of mutation.removedNodes) {
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                await this.processRemovedElement(node, processedElements)
+              }
+            }
+          }
           break
           
         case 'attributes':
-          await this.handleAttributeMutation(target, attributeName, processedElements)
+          await this.handleAttributeMutation(mutation, processedElements)
           break
-      }
-    }
-
-    async handleChildListMutation(addedNodes, removedNodes, processedElements) {
-      // Process added nodes
-      for (const node of addedNodes) {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          await this.processAddedElement(node, processedElements)
-        }
-      }
-      
-      // Process removed nodes
-      for (const node of removedNodes) {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          await this.processRemovedElement(node, processedElements)
-        }
-      }
-    }
-
-    async processAddedElement(element, processedElements) {
-      if (processedElements.has(element)) return
-      
-      // Check if element is relevant for caching
-      if (this.isRelevantElement(element)) {
-        // Add to cache
-      const elementId = await this.elementCache.addElement(element)
-        this.observeElement(element)
-        processedElements.add(element)
-        
-        if (this.isDebugMode() && elementId) {
-          console.debug(`➕ DOM Monitor: Added element to DOM & cache`, {
-            elementId,
-            tag: element.tagName,
-            className: element.className,
-            id: element.id,
-            text: element.textContent?.substring(0, 50) || ''
-          })
-        }
-        
-        // Process child elements
-        const relevantChildren = element.querySelectorAll(
-          'button, a, input, select, textarea, form, [role="button"], [tabindex], [onclick], [data-testid]'
-        )
-        
-        for (const child of relevantChildren) {
-          if (!processedElements.has(child)) {
-          const childId = await this.elementCache.addElement(child)
-            this.observeElement(child)
-            processedElements.add(child)
-            
-            if (this.isDebugMode() && childId) {
-              console.debug(`➕ DOM Monitor: Added child element`, {
-                elementId: childId,
-                tag: child.tagName,
-                className: child.className,
-                text: child.textContent?.substring(0, 30) || ''
-              })
-            }
-          }
-        }
       }
     }
 
     async processRemovedElement(element, processedElements) {
       if (processedElements.has(element)) return
       
-      // Remove from cache
-      const elementId = this.generateElementId(element)
-      const wasRemoved = this.elementCache.removeElement(elementId)
-      this.unobserveElement(element)
-      processedElements.add(element)
-      
-      if (this.isDebugMode() && wasRemoved) {
-        console.debug(`➖ DOM Monitor: Removed element from DOM & cache`, {
-          elementId,
-          tag: element.tagName,
-          className: element.className,
-          id: element.id,
-          text: element.textContent?.substring(0, 50) || ''
-        })
-      }
-      
-      // Process child elements
-      const allChildren = element.querySelectorAll('*')
-      for (const child of allChildren) {
-        const childId = this.generateElementId(child)
-        const childWasRemoved = this.elementCache.removeElement(childId)
-        this.unobserveElement(child)
-        processedElements.add(child)
+      try {
+        // IMPROVED: More thorough element removal
+        const elementId = this.generateElementId(element)
         
-        if (this.isDebugMode() && childWasRemoved) {
-          console.debug(`➖ DOM Monitor: Removed child element`, {
-            elementId: childId,
-            tag: child.tagName,
-            className: child.className,
-            text: child.textContent?.substring(0, 30) || ''
+        // DEBUG: Log element ID generation for tracking  
+        if (this.isDebugMode()) {
+          console.debug(`🆔 DOM Monitor: Generated ID for REMOVE`, {
+            elementId,
+            tag: element.tagName,
+            className: element.className,
+            dataTest: element.getAttribute('data-test'),
+            text: element.textContent?.slice(0, 30) || '',
+            inDOM: document.contains(element)
           })
         }
+        
+        // Check if element is actually removed from DOM (not just moved)
+        const stillInDOM = document.contains(element)
+        
+        if (!stillInDOM) {
+          // Remove from cache
+          const wasRemoved = this.elementCache.removeElement(elementId)
+          this.unobserveElement(element)
+          processedElements.add(element)
+          
+          if (this.isDebugMode()) {
+            console.debug(`➖ DOM Monitor: ${wasRemoved ? 'SUCCESSFULLY' : 'FAILED TO'} remove element from cache`, {
+              elementId,
+              tag: element.tagName,
+              className: element.className,
+              id: element.id,
+              dataTest: element.getAttribute('data-test'),
+              text: element.textContent?.substring(0, 50) || '',
+              wasRemoved
+            })
+          }
+          
+          // IMPROVED: Process child elements more efficiently and thoroughly
+          if (element.children && element.children.length > 0) {
+            // Get all descendants, not just direct children
+            const allDescendants = Array.from(element.querySelectorAll('*'))
+            
+            // Process in batches to avoid performance issues
+            const batchSize = 20
+            for (let i = 0; i < allDescendants.length; i += batchSize) {
+              const batch = allDescendants.slice(i, i + batchSize)
+              
+              for (const child of batch) {
+                const childId = this.generateElementId(child)
+                const childWasRemoved = this.elementCache.removeElement(childId)
+                this.unobserveElement(child)
+                processedElements.add(child)
+                
+                if (this.isDebugMode() && childWasRemoved) {
+                  console.debug(`➖ DOM Monitor: Removed child element`, {
+                    elementId: childId,
+                    tag: child.tagName,
+                    className: child.className,
+                    text: child.textContent?.substring(0, 30) || ''
+                  })
+                }
+              }
+              
+              // Small delay between batches to prevent blocking
+              if (i + batchSize < allDescendants.length) {
+                await new Promise(resolve => setTimeout(resolve, 1))
+              }
+            }
+          }
+        } else {
+          if (this.isDebugMode()) {
+            console.debug(`⚠️ DOM Monitor: Element removed from parent but still in DOM (moved?)`, {
+              elementId,
+              tag: element.tagName
+            })
+          }
+        }
+      } catch (error) {
+        console.warn('DOM Monitor: Error processing removed element (continuing):', error)
       }
     }
 
-    async handleAttributeMutation(element, attributeName, processedElements) {
+    async processAddedElement(element, processedElements) {
       if (processedElements.has(element)) return
       
+      // IMPROVED: Add safety checks and better duplicate detection
+      try {
+        // Verify element is actually in DOM and relevant
+        if (!document.contains(element) || !this.isRelevantElement(element)) {
+          return
+        }
+        
+        // IMPROVED: Check if we already have this element to prevent duplicates
+        const elementId = this.generateElementId(element)
+        const existingElement = this.elementCache.cache.elements.get(elementId)
+        
+        // DEBUG: Log element ID generation for tracking
+        if (this.isDebugMode()) {
+          console.debug(`🆔 DOM Monitor: Generated ID for ADD`, {
+            elementId,
+            tag: element.tagName,
+            className: element.className,
+            dataTest: element.getAttribute('data-test'),
+            text: element.textContent?.slice(0, 30) || '',
+            inDOM: document.contains(element)
+          })
+        }
+        
+        if (existingElement) {
+          // Element already cached, just update it
+          await this.elementCache.addElement(element)
+          processedElements.add(element)
+          
+          if (this.isDebugMode()) {
+            console.debug(`🔄 DOM Monitor: Updated existing element`, {
+              elementId,
+              tag: element.tagName,
+              className: element.className,
+              text: element.textContent?.substring(0, 50) || ''
+            })
+          }
+          return
+        }
+        
+        // Add new element to cache
+        const newElementId = await this.elementCache.addElement(element)
+        if (newElementId) {
+          this.observeElement(element)
+          processedElements.add(element)
+          
+          if (this.isDebugMode()) {
+            console.debug(`➕ DOM Monitor: Added NEW element to DOM & cache`, {
+              elementId: newElementId,
+              tag: element.tagName,
+              className: element.className,
+              id: element.id,
+              dataTest: element.getAttribute('data-test'),
+              text: element.textContent?.substring(0, 50) || ''
+            })
+          }
+        }
+        
+        // IMPROVED: Process child elements more efficiently
+        if (element.children && element.children.length > 0) {
+          const relevantChildren = element.querySelectorAll(
+            'button, a, input, select, textarea, form, [role="button"], [tabindex], [onclick], [data-testid]'
+          )
+          
+          // Process up to 15 children to balance thoroughness vs performance
+          const childrenToProcess = Array.from(relevantChildren).slice(0, 15)
+          
+          for (const child of childrenToProcess) {
+            if (!processedElements.has(child) && this.isRelevantElement(child)) {
+              const childElementId = this.generateElementId(child)
+              const existingChild = this.elementCache.cache.elements.get(childElementId)
+              
+              if (!existingChild) {
+                const childId = await this.elementCache.addElement(child)
+                if (childId) {
+                  this.observeElement(child)
+                  processedElements.add(child)
+                  
+                  if (this.isDebugMode()) {
+                    console.debug(`➕ DOM Monitor: Added NEW child element`, {
+                      elementId: childId,
+                      tag: child.tagName,
+                      className: child.className,
+                      text: child.textContent?.substring(0, 30) || ''
+                    })
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('DOM Monitor: Error processing added element (continuing):', error)
+      }
+    }
+
+    async handleAttributeMutation(mutation, processedElements) {
+      const element = mutation.target
       const elementId = this.generateElementId(element)
-      const oldValue = this.elementCache.cache.get(elementId)?.basicData?.attributes?.[attributeName]
+      const attributeName = mutation.attributeName
+      
+      // FIXED: Update cache reference to use new structure
+      const oldValue = this.elementCache.cache.elements.get(elementId)?.basicData?.attributes?.[attributeName]
       const newValue = element.getAttribute(attributeName)
       
-      // Update element in cache (addElement handles both add and update)
-      await this.elementCache.addElement(element)
-      processedElements.add(element)
-      
-      if (this.isDebugMode()) {
-        console.debug(`🔄 DOM Monitor: Attribute changed`, {
-          elementId,
-          tag: element.tagName,
-          className: element.className,
-          attribute: attributeName,
-          oldValue,
-          newValue,
-          text: element.textContent?.substring(0, 30) || ''
-        })
+      if (oldValue !== newValue) {
+        // Update element in cache
+        const updated = await this.elementCache.addElement(element)
+        if (updated) {
+          processedElements.add(element)
+          
+          if (this.isDebugMode()) {
+            console.debug(`🔄 DOM Monitor: Attribute updated`, {
+              elementId,
+              tag: element.tagName,
+              attribute: attributeName,
+              oldValue,
+              newValue
+            })
+          }
+        }
       }
     }
 
@@ -418,31 +568,33 @@
       }
     }
 
-    async _processVisibilityChanges(changes) {
-      for (const change of changes) {
-        const { elementId, element, isVisible, intersectionRatio, boundingBox } = change
+    async _processVisibilityChanges(entries) {
+      for (const entry of entries) {
+        const element = entry.target
+        const elementId = this.generateElementId(element)
         
-        const cachedElement = this.elementCache.cache.get(elementId)
+        // FIXED: Update cache reference to use new structure
+        const cachedElement = this.elementCache.cache.elements.get(elementId)
+        
         if (cachedElement) {
-          // Update visibility data
-          cachedElement.basicData.visibility = isVisible
-          cachedElement.basicData.intersectionRatio = intersectionRatio
-          cachedElement.basicData.position = {
-            x: boundingBox.left,
-            y: boundingBox.top,
-            width: boundingBox.width,
-            height: boundingBox.height
+          const wasVisible = cachedElement.basicData.visibility
+          const isVisible = entry.isIntersecting
+          
+          if (wasVisible !== isVisible) {
+            // Update element data
+            await this.elementCache.addElement(element)
+            
+            if (this.isDebugMode()) {
+              console.debug(`👁️ DOM Monitor: Visibility changed`, {
+                elementId,
+                tag: element.tagName,
+                wasVisible,
+                isVisible
+              })
+            }
           }
-          
-          // Update last seen timestamp
-          cachedElement.basicData.lastSeen = Date.now()
-          
-          // Update cache access
-          this.elementCache.updateAccessCount(elementId)
         }
       }
-      
-      this.stats.totalVisibilityChanges += changes.length
     }
 
     // Handle size changes
@@ -570,17 +722,71 @@
       this.sizeMap.delete(elementId)
     }
 
-    // Observe existing elements on start
+    // IMPROVED: More robust element observation with existing elements
     observeExistingElements() {
-      const relevantElements = document.querySelectorAll(
-        'button, a, input, select, textarea, form, [role="button"], [tabindex], [onclick], [data-testid]'
-      )
+      console.log("🔍 DOM Monitor: Starting initial element discovery...");
       
-      for (const element of relevantElements) {
-        this.observeElement(element)
+      try {
+        const selectors = [
+          'button', 'a[href]', 'input', 'select', 'textarea', 'form',
+          '[onclick]', '[role="button"]', '[role="link"]', '[tabindex]',
+          '.btn', '.button', '.link', '.clickable'
+        ]
+        
+        console.log("🔍 DOM Monitor: Using selectors:", selectors);
+        
+        const elements = document.querySelectorAll(selectors.join(','))
+        let addedCount = 0;
+        let skippedCount = 0;
+        
+        console.log("🔍 DOM Monitor: Found potential elements:", elements.length);
+        
+        // Process elements in batches to avoid blocking
+        const batchSize = 20
+        const processBatch = async (batch) => {
+          for (const element of batch) {
+            try {
+              if (this.isRelevantElement(element)) {
+                const elementId = await this.elementCache.addElement(element)
+                if (elementId) {
+                  this.observeElement(element)
+                  addedCount++
+                } else {
+                  skippedCount++
+                }
+              } else {
+                skippedCount++
+              }
+            } catch (error) {
+              console.warn("DOM Monitor: Error adding element during initial scan:", error)
+              skippedCount++
+            }
+          }
+        }
+        
+        // Process in batches
+        const batches = []
+        for (let i = 0; i < elements.length; i += batchSize) {
+          batches.push(Array.from(elements).slice(i, i + batchSize))
+        }
+        
+        // Process first batch immediately, others async
+        if (batches.length > 0) {
+          processBatch(batches[0]).then(() => {
+            console.log(`✅ DOM Monitor: Initial batch completed - Added: ${addedCount}, Skipped: ${skippedCount}`)
+            
+            // Process remaining batches asynchronously
+            batches.slice(1).forEach((batch, index) => {
+              setTimeout(() => processBatch(batch), (index + 1) * 100)
+            })
+          })
+        }
+        
+        console.log(`✅ DOM Monitor: Started initial scan - processing ${elements.length} elements in ${batches.length} batches`)
+        
+      } catch (error) {
+        console.error("❌ DOM Monitor: Error in initial element discovery:", error)
       }
-      
-      console.log(`DOM Monitor: Observing ${relevantElements.length} existing elements`)
     }
 
     updateVisibilityObservation(element) {

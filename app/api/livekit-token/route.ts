@@ -23,16 +23,6 @@ export async function POST(request: NextRequest) {
     const apiSecret = process.env.LIVEKIT_API_SECRET
     const wsUrl = process.env.LIVEKIT_URL
 
-    console.log('🔧 Environment check:', {
-      hasApiKey: !!apiKey,
-      hasApiSecret: !!apiSecret,
-      hasWsUrl: !!wsUrl,
-      apiKeyLength: apiKey?.length || 0,
-      apiKeyPrefix: apiKey?.substring(0, 10) || 'undefined',
-      wsUrlValue: wsUrl || 'undefined',
-      nodeEnv: process.env.NODE_ENV,
-      envSource: 'process.env'
-    })
 
     if (!apiKey || !apiSecret || !wsUrl) {
       console.error('❌ Missing LiveKit environment variables', {
@@ -67,14 +57,7 @@ export async function POST(request: NextRequest) {
     const userName = name || 'Voice Assistant User'
     const roomName = room || `voice-assistant-room-${Date.now()}`
     
-    console.log('🎯 Token generation configuration:', {
-      roomName,
-      userIdentity,
-      userName,
-      dispatchMode,
-      wsUrl: wsUrl.replace(/\/+$/, ''),
-      timestamp: new Date().toISOString()
-    })
+    
 
     const userInfo: AccessTokenOptions = {
       identity: userIdentity,
@@ -109,16 +92,6 @@ export async function POST(request: NextRequest) {
 
     // Generate the token
     const jwt = await token.toJwt()
-
-    console.log('✅ Successfully generated LiveKit token:', { 
-      room: roomName, 
-      identity: userIdentity, 
-      name: userName,
-      dispatchMode,
-      tokenLength: jwt.length,
-      jwtPreview: jwt.substring(0, 50) + '...',
-      success: true
-    })
 
     return NextResponse.json({
       token: jwt,

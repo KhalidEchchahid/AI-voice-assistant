@@ -16,25 +16,65 @@
       // `document.currentScript` points to the <script> that is executing right now
       const current = document.currentScript
 
+      console.log('AI Assistant Loader: Attempting to determine script path...')
+      console.log('AI Assistant Loader: document.currentScript:', current)
+      console.log('AI Assistant Loader: current script src:', current?.src)
+      console.log('AI Assistant Loader: window.location.href:', window.location.href)
+
       if (current && current.src) {
         const url = new URL(current.src, window.location.href)
         // Replace the filename (everything after the last '/') with helper file name
         url.pathname = url.pathname.replace(/[^/]*$/, 'assistant-helper.js')
         helperSrc = url.href
+        console.log('AI Assistant Loader: Resolved helper path:', helperSrc)
+      } else {
+        console.warn('AI Assistant Loader: Could not get currentScript.src, using relative path')
       }
     } catch (err) {
       console.warn('AI Assistant Loader: Could not determine base path of loader script, falling back to relative helper path', err)
     }
 
-    const script = document.createElement('script')
-    script.src = helperSrc
-    script.onload = () => {
-      console.log(`AI Assistant Loader: Helper script loaded successfully from ${helperSrc}`)
-      // Load DOM Monitor after helper is loaded
-      loadDOMMonitorScript()
+    // Try multiple fallback paths
+    const fallbackPaths = [
+      helperSrc,
+      './assistant-helper.js',
+      'assistant-helper.js',
+      window.location.origin + '/assistant-helper.js',
+      window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'assistant-helper.js'
+    ]
+
+    let pathIndex = 0
+    
+    function tryLoadHelper() {
+      if (pathIndex >= fallbackPaths.length) {
+        console.error('AI Assistant Loader: All helper script paths failed')
+        // Continue without helper - just load DOM Monitor
+        loadDOMMonitorScript()
+        return
+      }
+
+      const currentPath = fallbackPaths[pathIndex]
+      console.log(`AI Assistant Loader: Trying helper path ${pathIndex + 1}/${fallbackPaths.length}: ${currentPath}`)
+
+      const script = document.createElement('script')
+      script.src = currentPath
+      script.onload = () => {
+        console.log(`AI Assistant Loader: Helper script loaded successfully from ${currentPath}`)
+        // Load DOM Monitor after helper is loaded
+        loadDOMMonitorScript()
+      }
+      script.onerror = () => {
+        console.error(`AI Assistant Loader: Failed to load helper script from ${currentPath}`)
+        pathIndex++
+        // Remove failed script element
+        document.head.removeChild(script)
+        // Try next path
+        setTimeout(tryLoadHelper, 100)
+      }
+      document.head.appendChild(script)
     }
-    script.onerror = () => console.error(`AI Assistant Loader: Failed to load helper script from ${helperSrc}`)
-    document.head.appendChild(script)
+
+    tryLoadHelper()
   }
 
   // Load the DOM Monitor script for real-time element discovery
@@ -50,43 +90,78 @@
     try {
       const current = document.currentScript || document.querySelector('script[src*="assistant-loader"]')
 
+      console.log('AI Assistant Loader: Attempting to determine DOM Monitor script path...')
+      console.log('AI Assistant Loader: current script for DOM Monitor:', current)
+      console.log('AI Assistant Loader: current script src for DOM Monitor:', current?.src)
+
       if (current && current.src) {
         const url = new URL(current.src, window.location.href)
         url.pathname = url.pathname.replace(/[^/]*$/, 'dom-monitor/dom-monitor.js')
         monitorSrc = url.href
+        console.log('AI Assistant Loader: Resolved DOM Monitor path:', monitorSrc)
+      } else {
+        console.warn('AI Assistant Loader: Could not get currentScript.src for DOM Monitor, using relative path')
       }
     } catch (err) {
       console.warn('AI Assistant Loader: Could not determine base path for DOM monitor script, falling back to relative path', err)
     }
 
-    const script = document.createElement('script')
-    script.src = monitorSrc
-    script.onload = () => {
-      console.log(`AI Assistant Loader: DOM Monitor V2 script loaded successfully from ${monitorSrc}`)
-      
-      // Wait for DOMMonitor to be available before adding compatibility layer
-      let attempts = 0
-      const checkAndAddCompatibility = () => {
-        if (window.DOMMonitor || attempts > 50) {
-          if (window.DOMMonitor) {
-            console.log("AI Assistant Loader: DOMMonitor detected, adding compatibility layer")
-            addDOMMonitorCompatibilityLayer()
-          } else {
-            console.error("AI Assistant Loader: DOMMonitor not available after timeout")
-          }
-        } else {
-          attempts++
-          setTimeout(checkAndAddCompatibility, 100)
-        }
+    // Try multiple fallback paths for DOM Monitor
+    const fallbackPaths = [
+      monitorSrc,
+      './dom-monitor/dom-monitor.js',
+      'dom-monitor/dom-monitor.js',
+      window.location.origin + '/dom-monitor/dom-monitor.js',
+      window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'dom-monitor/dom-monitor.js'
+    ]
+
+    let pathIndex = 0
+    
+    function tryLoadDOMMonitor() {
+      if (pathIndex >= fallbackPaths.length) {
+        console.error('AI Assistant Loader: All DOM Monitor script paths failed, trying fallback')
+        // Fallback to old version if V2 fails
+        loadFallbackDOMMonitor()
+        return
       }
-      checkAndAddCompatibility()
+
+      const currentPath = fallbackPaths[pathIndex]
+      console.log(`AI Assistant Loader: Trying DOM Monitor path ${pathIndex + 1}/${fallbackPaths.length}: ${currentPath}`)
+
+      const script = document.createElement('script')
+      script.src = currentPath
+      script.onload = () => {
+        console.log(`AI Assistant Loader: DOM Monitor V2 script loaded successfully from ${currentPath}`)
+        
+        // Wait for DOMMonitor to be available before adding compatibility layer
+        let attempts = 0
+        const checkAndAddCompatibility = () => {
+          if (window.DOMMonitor || attempts > 50) {
+            if (window.DOMMonitor) {
+              console.log("AI Assistant Loader: DOMMonitor detected, adding compatibility layer")
+              addDOMMonitorCompatibilityLayer()
+            } else {
+              console.error("AI Assistant Loader: DOMMonitor not available after timeout")
+            }
+          } else {
+            attempts++
+            setTimeout(checkAndAddCompatibility, 100)
+          }
+        }
+        checkAndAddCompatibility()
+      }
+      script.onerror = () => {
+        console.error(`AI Assistant Loader: Failed to load DOM Monitor V2 script from ${currentPath}`)
+        pathIndex++
+        // Remove failed script element
+        document.head.removeChild(script)
+        // Try next path
+        setTimeout(tryLoadDOMMonitor, 100)
+      }
+      document.head.appendChild(script)
     }
-    script.onerror = () => {
-      console.error(`AI Assistant Loader: Failed to load DOM Monitor V2 script from ${monitorSrc}`)
-      // Fallback to old version if V2 fails
-      loadFallbackDOMMonitor()
-    }
-    document.head.appendChild(script)
+
+    tryLoadDOMMonitor()
   }
 
   // Add compatibility layer for API methods expected by existing code
@@ -96,7 +171,22 @@
     // Create a completely new compatibility wrapper object
     window.AIAssistantDOMMonitor = {
       // Forward core DOMMonitor methods with proper binding and error handling
-      initialize: () => window.DOMMonitor?.initialize?.() || Promise.resolve(),
+      initialize: async () => {
+        try {
+          if (!window.DOMMonitor?.initialize) {
+            console.warn('⚠️ Compatibility Layer: DOMMonitor.initialize not available');
+            return { success: false, error: 'DOMMonitor not available' };
+          }
+          
+          console.log('🔄 Compatibility Layer: Initializing DOM Monitor...');
+          const result = await window.DOMMonitor.initialize();
+          console.log('✅ Compatibility Layer: DOM Monitor initialized successfully');
+          return result || { success: true };
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error initializing DOM Monitor:', error);
+          return { success: false, error: error.message };
+        }
+      },
       // CRITICAL FIX: Properly handle async findElements and ensure it returns a Promise
       findElements: async (intent, options) => {
         try {
@@ -147,11 +237,180 @@
         }
       },
       getAllElements: (filter) => window.DOMMonitor?.getAllElements?.(filter) || Promise.resolve([]),
+      
+      // NEW: Classification-based element retrieval methods
+      getClickableElements: async () => {
+        try {
+          if (!window.DOMMonitor?.communicationBridge?.getClickableElements) {
+            console.warn('⚠️ Compatibility Layer: getClickableElements not available');
+            return [];
+          }
+          return await window.DOMMonitor.communicationBridge.getClickableElements();
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error in getClickableElements:', error);
+          return [];
+        }
+      },
+      
+      getFormElements: async () => {
+        try {
+          if (!window.DOMMonitor?.communicationBridge?.getFormElements) {
+            console.warn('⚠️ Compatibility Layer: getFormElements not available');
+            return [];
+          }
+          return await window.DOMMonitor.communicationBridge.getFormElements();
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error in getFormElements:', error);
+          return [];
+        }
+      },
+      
+      getNavigationElements: async () => {
+        try {
+          if (!window.DOMMonitor?.communicationBridge?.getNavigationElements) {
+            console.warn('⚠️ Compatibility Layer: getNavigationElements not available');
+            return [];
+          }
+          return await window.DOMMonitor.communicationBridge.getNavigationElements();
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error in getNavigationElements:', error);
+          return [];
+        }
+      },
+      
+      getByCategory: async (category) => {
+        try {
+          if (!window.DOMMonitor?.communicationBridge?.getByCategory) {
+            console.warn('⚠️ Compatibility Layer: getByCategory not available');
+            return [];
+          }
+          return await window.DOMMonitor.communicationBridge.getByCategory(category);
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error in getByCategory:', error);
+          return [];
+        }
+      },
+      
+      // Cache debugging methods
+      verifyCache: async () => {
+        try {
+          if (!window.DOMMonitor?.verifyCache) {
+            console.warn('⚠️ Compatibility Layer: verifyCache not available');
+            return { success: false, error: 'Method not available' };
+          }
+          return await window.DOMMonitor.verifyCache();
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error in verifyCache:', error);
+          return { success: false, error: error.message };
+        }
+      },
+      
+      refreshCache: async () => {
+        try {
+          if (!window.DOMMonitor?.refreshCache) {
+            console.warn('⚠️ Compatibility Layer: refreshCache not available');
+            return { success: false, error: 'Method not available' };
+          }
+          return await window.DOMMonitor.refreshCache();
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error in refreshCache:', error);
+          return { success: false, error: error.message };
+        }
+      },
+      
+      getCacheDebugInfo: async () => {
+        try {
+          if (!window.DOMMonitor?.getCacheDebugInfo) {
+            console.warn('⚠️ Compatibility Layer: getCacheDebugInfo not available');
+            return { error: 'Method not available' };
+          }
+          return await window.DOMMonitor.getCacheDebugInfo();
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error in getCacheDebugInfo:', error);
+          return { error: error.message };
+        }
+      },
+      
       forceRescan: () => window.DOMMonitor?.forceRescan?.() || Promise.resolve({ success: false, error: "Not available" }),
-      getStats: () => window.DOMMonitor?.getStats?.() || { cache: { totalElements: 0 } },
-      updateConfig: (config) => window.DOMMonitor?.updateConfig?.(config) || { success: false },
+      getStats: () => {
+        try {
+          if (window.DOMMonitor?.getStats) {
+            const stats = window.DOMMonitor.getStats();
+            // Ensure consistent format
+            return {
+              ...stats,
+              cache: stats.cache || { totalElements: 0, classifications: {} },
+              version: stats.version || "2.0.0",
+              uptime: stats.uptime || 0,
+              isReady: window.DOMMonitor.isReady ? window.DOMMonitor.isReady() : false
+            };
+          } else {
+            return {
+              version: "unknown",
+              uptime: 0,
+              isReady: false,
+              cache: { totalElements: 0, classifications: {} },
+              error: "DOM Monitor not available"
+            };
+          }
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error getting stats:', error);
+          return {
+            version: "error",
+            uptime: 0,
+            isReady: false,
+            cache: { totalElements: 0, classifications: {} },
+            error: error.message
+          };
+        }
+      },
+      updateConfig: async (config) => {
+        try {
+          if (!window.DOMMonitor?.updateConfig) {
+            console.warn('⚠️ Compatibility Layer: DOMMonitor.updateConfig not available');
+            return { success: false, error: 'updateConfig method not available' };
+          }
+          
+          console.log('🔧 Compatibility Layer: Updating DOM Monitor config...', config);
+          const result = await window.DOMMonitor.updateConfig(config);
+          console.log('✅ Compatibility Layer: Config updated successfully');
+          return result || { success: true };
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error updating config:', error);
+          return { success: false, error: error.message };
+        }
+      },
       isReady: () => window.DOMMonitor?.isReady?.() || false,
-      healthCheck: () => window.DOMMonitor?.healthCheck?.() || Promise.resolve({ isHealthy: false }),
+      healthCheck: async () => {
+        try {
+          if (!window.DOMMonitor?.healthCheck) {
+            return { 
+              isHealthy: false, 
+              version: 'unknown',
+              uptime: 0,
+              status: 'unavailable',
+              issues: ['DOM Monitor not available'] 
+            };
+          }
+          
+          const health = await window.DOMMonitor.healthCheck();
+          return health || { 
+            isHealthy: false, 
+            version: 'unknown',
+            status: 'error',
+            issues: ['Health check returned null'] 
+          };
+        } catch (error) {
+          console.error('❌ Compatibility Layer: Error in health check:', error);
+          return { 
+            isHealthy: false, 
+            version: 'error',
+            uptime: 0,
+            status: 'error',
+            issues: [error.message] 
+          };
+        }
+      },
       
       // Add missing refresh method (maps to forceRescan)
       refresh: async function() {
@@ -286,9 +545,9 @@
 
   // --- Configuration ---
   const DEFAULT_CONFIG = {
-    // Assistant iframe URL - Auto-detect for development
-    iframeUrl: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.endsWith('.local') 
-      ? "http://localhost:3000/" 
+    // Assistant iframe URL - Use current page for development, Vercel for production
+    iframeUrl: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.endsWith('.local')
+      ? window.location.origin + window.location.pathname  // Use current page for local development
       : "https://ai-voice-assistant-nu.vercel.app/",
 
     // Initial state
@@ -1079,19 +1338,47 @@
                     throw new Error(`DOM Monitor returned ${typeof elements} instead of array`);
                   }
                   
-                  // Process the elements and send response
-                  const serializedElements = elements.map(element => ({
-                    elementId: element.elementId || 'unknown',
-                    tagName: element.tagName || 'unknown',
-                    text: element.text || '',
-                    role: element.role || 'unknown',
-                    confidence: element.confidence || 0.8,
-                    position: element.position || {},
-                    visibility: element.visibility || true,
-                    interactable: element.interactable || true,
-                    selectors: element.selectors || [],
-                    attributes: element.attributes || {}
-                  }));
+                  // Process the elements and send response using DOMSerializer
+                  let serializedElements;
+                  
+                  try {
+                    // Use DOMSerializer if available for consistent serialization
+                    if (window.DOMMonitor?.serializer?.serializeElement) {
+                      serializedElements = elements.map(element => {
+                        // If element is already properly serialized by V2, use it directly
+                        if (element.elementId && element.basicData) {
+                          return window.DOMMonitor.serializer.serializeElement(element.element, element.elementId, element.basicData);
+                        } else {
+                          // For compatibility with old format, serialize the element
+                          return window.DOMMonitor.serializer.serializeElement(element, element.elementId || 'unknown');
+                        }
+                      });
+                    } else {
+                      // Fallback to manual serialization if DOMSerializer not available
+                      console.warn('⚠️ Compatibility Layer: DOMSerializer not available, using fallback serialization');
+                      serializedElements = elements.map(element => ({
+                        elementId: element.elementId || 'unknown',
+                        tagName: element.tagName || element.element?.tagName || 'unknown',
+                        text: element.text || element.element?.textContent?.slice(0, 100) || '',
+                        role: element.role || 'unknown',
+                        confidence: element.confidence || 0.8,
+                        position: element.position || {},
+                        visibility: element.visibility !== undefined ? element.visibility : true,
+                        interactable: element.interactable !== undefined ? element.interactable : true,
+                        selectors: element.selectors || [],
+                        attributes: element.attributes || element.element?.attributes || {}
+                      }));
+                    }
+                  } catch (serializationError) {
+                    console.error('❌ Compatibility Layer: Error in element serialization:', serializationError);
+                    // Use basic fallback serialization
+                    serializedElements = elements.map(element => ({
+                      elementId: element.elementId || 'unknown',
+                      tagName: element.tagName || 'unknown',
+                      text: element.text || '',
+                      error: 'Serialization failed'
+                    }));
+                  }
                   
                   console.log('✅ Processed elements:', serializedElements.length, 'elements found');
                   

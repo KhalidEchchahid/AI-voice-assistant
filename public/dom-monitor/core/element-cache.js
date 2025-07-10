@@ -2,7 +2,7 @@
 ;(() => {
   window.DOMMonitorModules = window.DOMMonitorModules || {}
 
-  // Enhanced Element Cache Class
+  // Enhanced Element Cache Class with Multi-Index Classification
   class EnhancedElementCache {
     constructor(config = {}) {
       this.config = {
@@ -13,12 +13,55 @@
         ...config
       }
       
-      // Core data structures
-      this.cache = new Map()
+      // REDESIGNED: Multi-index cache structure for classification
+      this.cache = {
+        // Main element storage
+        elements: new Map(), // elementId -> full element data
+        
+        // Classification indexes for fast category lookups
+        classifications: {
+          // By HTML element type
+          byType: {
+            button: new Set(),
+            link: new Set(), 
+            input: new Set(),
+            select: new Set(),
+            textarea: new Set(),
+            form: new Set(),
+            video: new Set(),
+            audio: new Set(),
+            iframe: new Set(),
+            div: new Set(),
+            span: new Set(),
+            img: new Set()
+          },
+          
+          // By action capability
+          byAction: {
+            clickable: new Set(),
+            typeable: new Set(),
+            selectable: new Set(),
+            scrollable: new Set(),
+            hoverable: new Set(),
+            draggable: new Set()
+          },
+          
+          // By context/purpose
+          byContext: {
+            navigation: new Set(),
+            form: new Set(),
+            media: new Set(),
+            content: new Set(),
+            button: new Set(),
+            menu: new Set()
+          }
+        }
+      }
+      
       this.accessCount = new Map()
       this.lastAccess = new Map()
       
-      // Enhanced search indexes
+      // Legacy search indexes (kept for backward compatibility)
       this.textIndex = new Map()
       this.roleIndex = new Map()
       this.selectorIndex = new Map()
@@ -36,7 +79,14 @@
         cacheHits: 0,
         cacheMisses: 0,
         indexUpdates: 0,
-        lastCleanup: Date.now()
+        lastCleanup: Date.now(),
+        classifications: {
+          clickable: 0,
+          typeable: 0,
+          navigation: 0,
+          form: 0,
+          media: 0
+        }
       }
     }
 
@@ -45,10 +95,10 @@
       this.performanceManager = performanceManager
       this.serializer = serializer
       
-      console.log("✅ DOM Monitor: Enhanced Element Cache initialized")
+      console.log("✅ DOM Monitor: Enhanced Element Cache with Classification initialized")
     }
 
-    // Add element with performance budgeting
+    // MAIN CLASSIFICATION METHOD: Add element and classify it
     async addElement(element) {
       if (!this.isRelevantElement(element)) {
         return null
@@ -82,13 +132,16 @@
         const elementData = new window.DOMMonitorModules.EnhancedElementData(element, this.config)
         const elementId = elementData.basicData.id
         
-        const existing = this.cache.get(elementId)
+        const existing = this.cache.elements.get(elementId)
         
         if (existing) {
           // Update existing element
           existing.updateBasicData()
           this.updateAccessCount(elementId)
           this.stats.cacheHits++
+          
+          // Re-classify in case properties changed
+          this._classifyElement(elementId, elementData)
           
           if (this.isDebug()) {
             console.debug("📦 DOM Monitor: Cache UPDATED", { elementId, tag: element.tagName, text: existing.basicData?.text })
@@ -98,19 +151,29 @@
         }
         
         // Check cache size and cleanup if needed
-        if (this.cache.size >= this.config.maxSize) {
+        if (this.cache.elements.size >= this.config.maxSize) {
           this.evictLeastRecentlyUsed()
         }
         
-        // Add new element
-        this.cache.set(elementId, elementData)
+        // Add new element to main storage
+        this.cache.elements.set(elementId, elementData)
+        
+        // CRITICAL: Classify the element into appropriate categories
+        this._classifyElement(elementId, elementData)
+        
+        // Update legacy indexes for backward compatibility
         this.updateSearchIndexes(elementId, elementData)
         this.updateAccessCount(elementId)
         this.updateStats(elementData)
         this.stats.cacheMisses++
         
         if (this.isDebug()) {
-          console.debug("📦 DOM Monitor: Cache ADD", { elementId, tag: element.tagName, text: elementData.basicData?.text })
+          console.debug("📦 DOM Monitor: Cache ADD with classification", { 
+            elementId, 
+            tag: element.tagName, 
+            text: elementData.basicData?.text,
+            classifications: this._getElementClassifications(elementId)
+          })
         }
         
         return elementId
@@ -119,6 +182,418 @@
         console.warn('DOM Monitor: Error adding element to cache:', error)
         return null
       }
+    }
+
+    // CLASSIFICATION LOGIC: Automatically classify elements into categories
+    _classifyElement(elementId, elementData) {
+      const basicData = elementData.basicData
+      const tag = basicData.tagName.toLowerCase()
+      const attributes = basicData.attributes || {}
+      const role = basicData.role.toLowerCase()
+      
+      // Clear existing classifications for this element
+      this._removeFromAllClassifications(elementId)
+      
+      // Classify by HTML type
+      if (this.cache.classifications.byType[tag]) {
+        this.cache.classifications.byType[tag].add(elementId)
+      }
+      
+      // Classify by action capability
+      this._classifyByAction(elementId, basicData, tag, attributes, role)
+      
+      // Classify by context/purpose  
+      this._classifyByContext(elementId, basicData, tag, attributes, role)
+      
+      // Update classification stats
+      this._updateClassificationStats()
+    }
+
+    _classifyByAction(elementId, basicData, tag, attributes, role) {
+      // CLICKABLE elements
+      if (this._isClickable(tag, attributes, role, basicData)) {
+        this.cache.classifications.byAction.clickable.add(elementId)
+      }
+      
+      // TYPEABLE elements  
+      if (this._isTypeable(tag, attributes, role)) {
+        this.cache.classifications.byAction.typeable.add(elementId)
+      }
+      
+      // SELECTABLE elements
+      if (this._isSelectable(tag, attributes, role)) {
+        this.cache.classifications.byAction.selectable.add(elementId)
+      }
+      
+      // SCROLLABLE elements
+      if (this._isScrollable(basicData)) {
+        this.cache.classifications.byAction.scrollable.add(elementId)
+      }
+      
+      // HOVERABLE elements (have hover effects)
+      if (this._isHoverable(tag, attributes, basicData)) {
+        this.cache.classifications.byAction.hoverable.add(elementId)
+      }
+      
+      // DRAGGABLE elements
+      if (this._isDraggable(attributes)) {
+        this.cache.classifications.byAction.draggable.add(elementId)
+      }
+    }
+
+    _classifyByContext(elementId, basicData, tag, attributes, role) {
+      // NAVIGATION context
+      if (this._isNavigation(tag, attributes, role, basicData)) {
+        this.cache.classifications.byContext.navigation.add(elementId)
+      }
+      
+      // FORM context
+      if (this._isFormContext(tag, attributes, role)) {
+        this.cache.classifications.byContext.form.add(elementId)
+      }
+      
+      // MEDIA context
+      if (this._isMediaContext(tag, attributes)) {
+        this.cache.classifications.byContext.media.add(elementId)
+      }
+      
+      // CONTENT context 
+      if (this._isContentContext(tag, basicData)) {
+        this.cache.classifications.byContext.content.add(elementId)
+      }
+      
+      // BUTTON context (specific button-like elements)
+      if (this._isButtonContext(tag, attributes, role)) {
+        this.cache.classifications.byContext.button.add(elementId)
+      }
+      
+      // MENU context
+      if (this._isMenuContext(tag, attributes, role)) {
+        this.cache.classifications.byContext.menu.add(elementId)
+      }
+    }
+
+    // CLASSIFICATION HELPERS: Determine what categories an element belongs to
+    
+    _isClickable(tag, attributes, role, basicData) {
+      return (
+        tag === 'button' ||
+        tag === 'a' ||
+        role === 'button' ||
+        role === 'link' ||
+        attributes.onclick ||
+        attributes.tabindex ||
+        basicData.interactable ||
+        this._hasClickableClass(attributes.className)
+      )
+    }
+    
+    _isTypeable(tag, attributes, role) {
+      return (
+        tag === 'input' ||
+        tag === 'textarea' ||
+        role === 'textbox' ||
+        attributes.contenteditable === 'true' ||
+        (tag === 'input' && this._isTypableInputType(attributes.type))
+      )
+    }
+    
+    _isSelectable(tag, attributes, role) {
+      return (
+        tag === 'select' ||
+        role === 'listbox' ||
+        role === 'combobox' ||
+        (tag === 'input' && (attributes.type === 'checkbox' || attributes.type === 'radio'))
+      )
+    }
+    
+    _isScrollable(basicData) {
+      // This would need element dimension checking - placeholder for now
+      return basicData.position && (basicData.position.height > 100 || basicData.position.width > 100)
+    }
+    
+    _isHoverable(tag, attributes, basicData) {
+      return (
+        attributes.title ||
+        attributes['data-tooltip'] ||
+        attributes['aria-label'] ||
+        this._hasHoverClass(attributes.className)
+      )
+    }
+    
+    _isDraggable(attributes) {
+      return attributes.draggable === 'true' || this._hasDraggableClass(attributes.className)
+    }
+    
+    _isNavigation(tag, attributes, role, basicData) {
+      return (
+        tag === 'nav' ||
+        tag === 'a' ||
+        role === 'navigation' ||
+        role === 'link' ||
+        this._hasNavigationClass(attributes.className) ||
+        this._isNavigationText(basicData.text)
+      )
+    }
+    
+    _isFormContext(tag, attributes, role) {
+      return (
+        tag === 'form' ||
+        tag === 'input' ||
+        tag === 'select' ||
+        tag === 'textarea' ||
+        tag === 'button' ||
+        tag === 'fieldset' ||
+        tag === 'label' ||
+        role === 'form' ||
+        attributes.form
+      )
+    }
+    
+    _isMediaContext(tag, attributes) {
+      return (
+        tag === 'video' ||
+        tag === 'audio' ||
+        tag === 'iframe' ||
+        this._hasMediaClass(attributes.className)
+      )
+    }
+    
+    _isContentContext(tag, basicData) {
+      const contentTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'div', 'article', 'section']
+      return contentTags.includes(tag) && basicData.text && basicData.text.length > 5
+    }
+    
+    _isButtonContext(tag, attributes, role) {
+      return (
+        tag === 'button' ||
+        role === 'button' ||
+        (tag === 'input' && ['button', 'submit', 'reset'].includes(attributes.type)) ||
+        this._hasButtonClass(attributes.className)
+      )
+    }
+    
+    _isMenuContext(tag, attributes, role) {
+      return (
+        role === 'menu' ||
+        role === 'menubar' ||
+        role === 'menuitem' ||
+        this._hasMenuClass(attributes.className)
+      )
+    }
+
+    // HELPER METHODS for class-based detection
+    _hasClickableClass(className) {
+      if (!className) return false
+      const clickableClasses = ['btn', 'button', 'click', 'link', 'clickable']
+      return clickableClasses.some(cls => className.includes(cls))
+    }
+    
+    _hasNavigationClass(className) {
+      if (!className) return false
+      const navClasses = ['nav', 'menu', 'breadcrumb', 'link', 'navigation']
+      return navClasses.some(cls => className.includes(cls))
+    }
+    
+    _hasButtonClass(className) {
+      if (!className) return false
+      const buttonClasses = ['btn', 'button', 'submit', 'action']
+      return buttonClasses.some(cls => className.includes(cls))
+    }
+    
+    _hasMenuClass(className) {
+      if (!className) return false
+      const menuClasses = ['menu', 'dropdown', 'nav', 'submenu']
+      return menuClasses.some(cls => className.includes(cls))
+    }
+    
+    _hasHoverClass(className) {
+      if (!className) return false
+      const hoverClasses = ['tooltip', 'hover', 'popup', 'dropdown']
+      return hoverClasses.some(cls => className.includes(cls))
+    }
+    
+    _hasDraggableClass(className) {
+      if (!className) return false
+      const dragClasses = ['draggable', 'sortable', 'moveable']
+      return dragClasses.some(cls => className.includes(cls))
+    }
+    
+    _hasMediaClass(className) {
+      if (!className) return false
+      const mediaClasses = ['video', 'audio', 'player', 'media']
+      return mediaClasses.some(cls => className.includes(cls))
+    }
+    
+    _isTypableInputType(type) {
+      const typableTypes = ['text', 'email', 'password', 'search', 'tel', 'url', 'number']
+      return !type || typableTypes.includes(type.toLowerCase())
+    }
+    
+    _isNavigationText(text) {
+      if (!text) return false
+      const navWords = ['home', 'about', 'contact', 'menu', 'navigation', 'nav', 'back', 'next', 'previous']
+      const lowerText = text.toLowerCase()
+      return navWords.some(word => lowerText.includes(word))
+    }
+
+    // CATEGORY-BASED QUERY METHODS: Main API for agent requests
+    
+    async findByCategory(category, options = {}) {
+      console.log(`🔍 DOM Monitor: Finding elements by category '${category}'`)
+      
+      const results = this._getElementsByCategory(category)
+      
+      if (results.length === 0) {
+        console.log(`⚠️ DOM Monitor: No elements found for category '${category}'`)
+        return []
+      }
+      
+      console.log(`✅ DOM Monitor: Found ${results.length} elements for category '${category}'`)
+      
+      // Convert to agent-friendly format
+      return results.map(elementData => ({
+        elementId: elementData.basicData.id,
+        element: elementData.basicData,
+        confidence: Math.min(elementData.priority / 20, 1.0),
+        totalScore: elementData.priority,
+        classifications: this._getElementClassifications(elementData.basicData.id)
+      })).slice(0, options.limit || 20)
+    }
+    
+    _getElementsByCategory(category) {
+      const results = []
+      let elementIds = new Set()
+      
+      // Map category requests to classification sets
+      switch (category.toLowerCase()) {
+        // Action-based categories
+        case 'get_clickable_elements':
+        case 'clickable':
+          elementIds = this.cache.classifications.byAction.clickable
+          break
+          
+        case 'get_form_elements':
+        case 'get_type_targets':
+        case 'typeable':
+          elementIds = this.cache.classifications.byAction.typeable
+          break
+          
+        case 'get_navigation_elements':
+        case 'navigation':
+          elementIds = this.cache.classifications.byContext.navigation
+          break
+          
+        case 'get_media_elements':
+        case 'media':
+          elementIds = this.cache.classifications.byContext.media
+          break
+          
+        case 'get_select_targets':
+        case 'selectable':
+          elementIds = this.cache.classifications.byAction.selectable
+          break
+          
+        case 'get_scroll_targets':
+        case 'scrollable':
+          elementIds = this.cache.classifications.byAction.scrollable
+          break
+          
+        // Type-based categories
+        case 'get_buttons':
+        case 'buttons':
+          elementIds = this.cache.classifications.byType.button
+          break
+          
+        case 'get_links':
+        case 'links':
+          elementIds = this.cache.classifications.byType.link
+          break
+          
+        case 'get_inputs':
+        case 'inputs':
+          elementIds = this.cache.classifications.byType.input
+          break
+          
+        // Combined categories
+        case 'get_all_interactive':
+        case 'interactive':
+          // Combine clickable, typeable, selectable
+          elementIds = new Set([
+            ...this.cache.classifications.byAction.clickable,
+            ...this.cache.classifications.byAction.typeable,
+            ...this.cache.classifications.byAction.selectable
+          ])
+          break
+          
+        case 'get_visible_elements':
+        case 'visible':
+          // Return all cached elements that are visible
+          elementIds = new Set(this.cache.elements.keys())
+          break
+          
+        default:
+          console.warn(`DOM Monitor: Unknown category '${category}'`)
+          return []
+      }
+      
+      // Convert element IDs to element data, filtering for visible/interactable
+      for (const elementId of elementIds) {
+        const elementData = this.cache.elements.get(elementId)
+        if (elementData && elementData.basicData.visibility && elementData.basicData.interactable) {
+          results.push(elementData)
+        }
+      }
+      
+      return results.sort((a, b) => b.priority - a.priority)
+    }
+
+    // MISSING METHODS: Add the referenced classification methods
+    
+    _removeFromAllClassifications(elementId) {
+      // Remove element from all classification sets
+      Object.values(this.cache.classifications.byType).forEach(set => set.delete(elementId))
+      Object.values(this.cache.classifications.byAction).forEach(set => set.delete(elementId))
+      Object.values(this.cache.classifications.byContext).forEach(set => set.delete(elementId))
+    }
+    
+    _updateClassificationStats() {
+      this.stats.classifications.clickable = this.cache.classifications.byAction.clickable.size
+      this.stats.classifications.typeable = this.cache.classifications.byAction.typeable.size
+      this.stats.classifications.navigation = this.cache.classifications.byContext.navigation.size
+      this.stats.classifications.form = this.cache.classifications.byContext.form.size
+      this.stats.classifications.media = this.cache.classifications.byContext.media.size
+    }
+    
+    _getElementClassifications(elementId) {
+      const classifications = {
+        byType: [],
+        byAction: [],
+        byContext: []
+      }
+      
+      // Check which type classifications this element belongs to
+      for (const [type, set] of Object.entries(this.cache.classifications.byType)) {
+        if (set.has(elementId)) {
+          classifications.byType.push(type)
+        }
+      }
+      
+      // Check action classifications
+      for (const [action, set] of Object.entries(this.cache.classifications.byAction)) {
+        if (set.has(elementId)) {
+          classifications.byAction.push(action)
+        }
+      }
+      
+      // Check context classifications
+      for (const [context, set] of Object.entries(this.cache.classifications.byContext)) {
+        if (set.has(elementId)) {
+          classifications.byContext.push(context)
+        }
+      }
+      
+      return classifications
     }
 
     // Enhanced element relevance check
@@ -160,59 +635,50 @@
       return false
     }
 
-    // Enhanced search with performance budgeting
+    // UPDATED: Main findByIntent method to use new classification system
     async findByIntent(intent, options = {}) {
-      const searchOperation = async () => {
-        return this._findByIntentInternal(intent, options)
-      }
-
-      if (this.performanceManager) {
-        const result = await this.performanceManager.executeWithBudget(
-          searchOperation,
-          50, // Max 50ms for search
-          'findByIntent'
-        )
-        
-        if (result.success) {
-          this.performanceManager.trackCacheHit()
-          return result.result
-        } else {
-          this.performanceManager.trackCacheMiss()
-          return []
-        }
-      }
+      console.log("🔍 DOM Monitor: Starting enhanced intent search:", { intent });
+      console.log("🔍 DOM Monitor: Current cache size:", this.cache.elements.size);
       
-      return searchOperation()
-    }
-
-    _findByIntentInternal(intent, options = {}) {
-      if (!intent || typeof intent !== 'string') {
-        return this._getFallbackElements(options)
+      // ENHANCED: Better intent validation and fallback handling
+      if (!intent || intent === 'undefined' || typeof intent !== 'string') {
+        console.warn("⚠️ DOM Monitor: Invalid intent provided:", intent, "- using fallback to show all elements");
+        return this._getFallbackElements();
       }
       
       const intentLower = intent.toLowerCase()
       
-      // ENHANCED: Handle specific default intent categories first
-      if (this._isDefaultIntent(intentLower)) {
-        console.log('DOM Monitor: Using default intent category:', intent)
-        return this._handleDefaultIntent(intentLower, options)
+      // TRY CLASSIFICATION FIRST: Check if this is a category request
+      if (this._isKnownCategory(intentLower)) {
+        console.log("🎯 DOM Monitor: Using classification system for known category:", intentLower)
+        return await this.findByCategory(intentLower, options)
       }
       
-      // IMMEDIATE FIX: Handle common agent intents that should return all interactive elements
-      if (intentLower.includes('interactive') || 
-          intentLower.includes('clickable') ||
-          intentLower.includes('button') ||
-          intentLower.includes('element') ||
-          intentLower.includes('list') ||
-          intentLower.includes('find') ||
-          intentLower.includes('get') ||
-          intentLower.includes('show') ||
-          intentLower.includes('all')) {
-        
-        console.log('DOM Monitor: Using fallback for general intent:', intent)
-        return this._getFallbackElements(options)
-      }
+      // FALLBACK: Use legacy semantic search for specific terms
+      console.log("🔍 DOM Monitor: Using legacy semantic search for:", intentLower)
+      return this._findByIntentLegacy(intentLower, options)
+    }
+    
+    _isKnownCategory(intent) {
+      const knownCategories = [
+        'get_clickable_elements', 'clickable',
+        'get_form_elements', 'get_type_targets', 'typeable',
+        'get_navigation_elements', 'navigation',
+        'get_media_elements', 'media',
+        'get_select_targets', 'selectable',
+        'get_scroll_targets', 'scrollable',
+        'get_buttons', 'buttons',
+        'get_links', 'links', 
+        'get_inputs', 'inputs',
+        'get_all_interactive', 'interactive',
+        'get_visible_elements', 'visible'
+      ]
       
+      return knownCategories.includes(intent)
+    }
+    
+    _findByIntentLegacy(intentLower, options = {}) {
+      // This is the original semantic search logic (kept for backward compatibility)
       const results = new Map()
       
       // Extract semantic keywords
@@ -232,7 +698,7 @@
       
       // If no results from semantic search, use fallback
       if (finalResults.length === 0) {
-        console.log('DOM Monitor: No semantic results, using fallback for:', intent)
+        console.log('DOM Monitor: No semantic results, using fallback for:', intentLower)
         return this._getFallbackElements(options)
       }
       
@@ -254,7 +720,7 @@
     _handleDefaultIntent(intent, options = {}) {
       const results = new Map()
       
-      console.log(`DOM Monitor: Processing default intent '${intent}' from cache of ${this.cache.size} elements`)
+      console.log(`DOM Monitor: Processing default intent '${intent}' from cache of ${this.cache.elements.size} elements`)
       
       switch (intent) {
         case 'get_all_interactive':
@@ -313,7 +779,7 @@
 
     // Specific element type handlers for default intents
     _addAllInteractiveElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         if (basicData.visibility && basicData.interactable) {
           this._addElementToResults(results, elementId, data, 7.0, 'interactive_element')
@@ -322,7 +788,7 @@
     }
 
     _addClickableElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         if (basicData.visibility && basicData.interactable) {
           const tag = basicData.tagName.toLowerCase()
@@ -337,7 +803,7 @@
     }
 
     _addFormElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         if (basicData.visibility && basicData.interactable) {
           const tag = basicData.tagName.toLowerCase()
@@ -350,7 +816,7 @@
     }
 
     _addNavigationElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         if (basicData.visibility && basicData.interactable) {
           const tag = basicData.tagName.toLowerCase()
@@ -364,7 +830,7 @@
     }
 
     _addMediaElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         const tag = basicData.tagName.toLowerCase()
         
@@ -375,7 +841,7 @@
     }
 
     _addSelectElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         if (basicData.visibility && basicData.interactable) {
           const tag = basicData.tagName.toLowerCase()
@@ -388,7 +854,7 @@
     }
 
     _addScrollableElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         if (basicData.visibility) {
           // Check if element might be scrollable
@@ -400,7 +866,7 @@
     }
 
     _addButtonElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         if (basicData.visibility && basicData.interactable) {
           const tag = basicData.tagName.toLowerCase()
@@ -415,7 +881,7 @@
     }
 
     _addLinkElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         if (basicData.visibility && basicData.interactable) {
           const tag = basicData.tagName.toLowerCase()
@@ -429,7 +895,7 @@
     }
 
     _addInputElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         if (basicData.visibility && basicData.interactable) {
           const tag = basicData.tagName.toLowerCase()
@@ -442,7 +908,7 @@
     }
 
     _addVisibleElements(results) {
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         const basicData = data.basicData
         if (basicData.visibility) {
           this._addElementToResults(results, elementId, data, 6.0, 'visible_element')
@@ -527,7 +993,7 @@
           
           if (similarity >= 0.5) {
             for (const elementId of elementIds) {
-              const element = this.cache.get(elementId)
+              const element = this.cache.elements.get(elementId)
               if (element) {
                 const score = similarity * 10
                 this._addToResults(results, elementId, score, 'text')
@@ -555,7 +1021,7 @@
             const elementIds = this.roleIndex.get(role)
             if (elementIds) {
               for (const elementId of elementIds) {
-                const element = this.cache.get(elementId)
+                const element = this.cache.elements.get(elementId)
                 if (element) {
                   this._addToResults(results, elementId, 8, 'role')
                 }
@@ -571,7 +1037,7 @@
         for (const [attrValue, elementIds] of this.attributeIndex.entries()) {
           if (attrValue.includes(keyword)) {
             for (const elementId of elementIds) {
-              const element = this.cache.get(elementId)
+              const element = this.cache.elements.get(elementId)
               if (element) {
                 this._addToResults(results, elementId, 6, 'attribute')
               }
@@ -586,7 +1052,7 @@
         for (const [selector, elementIds] of this.selectorIndex.entries()) {
           if (selector.includes(keyword)) {
             for (const elementId of elementIds) {
-              const element = this.cache.get(elementId)
+              const element = this.cache.elements.get(elementId)
               if (element) {
                 this._addToResults(results, elementId, 4, 'selector')
               }
@@ -617,7 +1083,7 @@
       } else {
         results.set(elementId, {
           elementId,
-          element: this.cache.get(elementId).basicData,
+          element: this.cache.elements.get(elementId).basicData,
           scores: { [source]: score },
           totalScore: score,
           confidence: Math.min(score / 10, 0.95)
@@ -628,9 +1094,9 @@
     _getFallbackElements(options = {}) {
       const elements = []
       
-      console.log(`DOM Monitor: Getting fallback elements from cache of ${this.cache.size} elements`)
+      console.log(`DOM Monitor: Getting fallback elements from cache of ${this.cache.elements.size} elements`)
       
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         // Be more lenient with fallback - include all cached elements that are relevant
         const basicData = data.basicData
         const isRelevant = this._isElementRelevantForFallback(basicData)
@@ -809,19 +1275,22 @@
     }
 
     removeElement(elementId) {
-      const data = this.cache.get(elementId)
+      const data = this.cache.elements.get(elementId)
       if (!data) return false
       
       if (this.isDebug()) {
         console.debug("📦 DOM Monitor: Cache REMOVE", { elementId, tag: data.basicData?.tagName, text: data.basicData?.text })
       }
       
-      // Remove from cache
-      this.cache.delete(elementId)
+      // CRITICAL: Remove from classifications first
+      this._removeFromAllClassifications(elementId)
+      
+      // Remove from main cache
+      this.cache.elements.delete(elementId)
       this.accessCount.delete(elementId)
       this.lastAccess.delete(elementId)
       
-      // Remove from indexes
+      // Remove from legacy search indexes
       this.removeFromSearchIndexes(elementId, data)
       this.updateStatsAfterRemoval(data)
       
@@ -909,7 +1378,7 @@
 
     // Statistics and reporting
     updateStats(elementData) {
-      this.stats.totalElements = this.cache.size
+      this.stats.totalElements = this.cache.elements.size
       
       if (elementData.basicData.visibility) {
         this.stats.visibleElements++
@@ -921,7 +1390,7 @@
     }
 
     updateStatsAfterRemoval(elementData) {
-      this.stats.totalElements = this.cache.size
+      this.stats.totalElements = this.cache.elements.size
       
       if (elementData.basicData.visibility) {
         this.stats.visibleElements = Math.max(0, this.stats.visibleElements - 1)
@@ -933,8 +1402,11 @@
     }
 
     getStats() {
+      // Update classification stats before returning
+      this._updateClassificationStats()
+      
       return {
-        totalElements: this.cache.size,
+        totalElements: this.cache.elements.size,
         visibleElements: this.stats.visibleElements,
         interactableElements: this.stats.interactableElements,
         textIndexSize: this.textIndex.size,
@@ -945,26 +1417,64 @@
         cacheMisses: this.stats.cacheMisses,
         indexUpdates: this.stats.indexUpdates,
         memoryUsage: this.estimateMemoryUsage(),
-        lastCleanup: this.stats.lastCleanup
+        lastCleanup: this.stats.lastCleanup,
+        classifications: this.stats.classifications
       }
+    }
+
+    // NEW: Get classification summary for debugging
+    getClassificationSummary() {
+      const summary = {
+        byType: {},
+        byAction: {},
+        byContext: {}
+      }
+      
+      // Count elements in each classification
+      for (const [type, set] of Object.entries(this.cache.classifications.byType)) {
+        summary.byType[type] = set.size
+      }
+      
+      for (const [action, set] of Object.entries(this.cache.classifications.byAction)) {
+        summary.byAction[action] = set.size
+      }
+      
+      for (const [context, set] of Object.entries(this.cache.classifications.byContext)) {
+        summary.byContext[context] = set.size
+      }
+      
+      return summary
     }
 
     estimateMemoryUsage() {
       // Rough estimation in KB
       const avgElementSize = 2 // KB per element
       const indexOverhead = Math.round((this.textIndex.size + this.roleIndex.size + this.selectorIndex.size) * 0.1)
-      return Math.round(this.cache.size * avgElementSize + indexOverhead)
+      return Math.round(this.cache.elements.size * avgElementSize + indexOverhead)
     }
 
-    // Cleanup operations
+    // IMPROVED: More conservative cleanup to prevent over-cleaning
     cleanup() {
       const now = Date.now()
       const maxAge = this.config.maxAge
       const toRemove = []
       
-      for (const [elementId, data] of this.cache.entries()) {
+      // Only cleanup if we haven't cleaned recently (prevent cleanup loops)
+      if (now - this.stats.lastCleanup < 10000) { // 10 second minimum between cleanups
+        console.log("🧹 DOM Monitor: Skipping cleanup, too recent")
+        return {
+          removed: 0,
+          remaining: this.cache.elements.size,
+          skipped: true
+        }
+      }
+      
+      for (const [elementId, data] of this.cache.elements.entries()) {
         if (now - data.basicData.lastSeen > maxAge) {
-          toRemove.push(elementId)
+          // Additional check: only remove if element no longer exists in DOM
+          if (!document.contains(data.element)) {
+            toRemove.push(elementId)
+          }
         }
       }
       
@@ -975,19 +1485,118 @@
       this.stats.lastCleanup = now
       
       if (toRemove.length > 0) {
-        console.log(`DOM Monitor: Cleaned up ${toRemove.length} stale elements`)
+        console.log(`🧹 DOM Monitor: Cleaned up ${toRemove.length} stale elements`)
       }
       
       return {
         removed: toRemove.length,
-        remaining: this.cache.size
+        remaining: this.cache.elements.size,
+        skipped: false
       }
+    }
+
+    // NEW: Verify cache consistency and remove stale elements
+    verifyAndCleanCache() {
+      console.log("🔍 DOM Monitor: Verifying cache consistency...")
+      
+      const toRemove = []
+      let checkedCount = 0
+      let staleCount = 0
+      
+      for (const [elementId, data] of this.cache.elements.entries()) {
+        checkedCount++
+        
+        // Check if element still exists in DOM
+        if (!document.contains(data.element)) {
+          toRemove.push(elementId)
+          staleCount++
+          
+          if (this.isDebug()) {
+            console.debug(`🗑️ DOM Monitor: Found stale element`, {
+              elementId,
+              tag: data.basicData.tagName,
+              text: data.basicData.text?.slice(0, 30) || ''
+            })
+          }
+        }
+      }
+      
+      // Remove stale elements
+      for (const elementId of toRemove) {
+        this.removeElement(elementId)
+      }
+      
+      const result = {
+        checked: checkedCount,
+        staleFound: staleCount,
+        removed: toRemove.length,
+        remaining: this.cache.elements.size
+      }
+      
+      if (staleCount > 0) {
+        console.log(`🧹 DOM Monitor: Cache verification complete - removed ${staleCount} stale elements out of ${checkedCount} checked`)
+      } else {
+        console.log(`✅ DOM Monitor: Cache verification complete - no stale elements found (${checkedCount} checked)`)
+      }
+      
+      return result
+    }
+
+    // NEW: Force complete cache refresh
+    async forceRefresh() {
+      console.log("🔄 DOM Monitor: Starting force cache refresh...")
+      
+      // Clear everything
+      this.clear()
+      
+      // Re-scan DOM for relevant elements
+      const selectors = [
+        'button', 'a[href]', 'input', 'select', 'textarea', 'form',
+        '[onclick]', '[role="button"]', '[role="link"]', '[tabindex]',
+        '.btn', '.button', '.link', '.clickable', '[data-testid]'
+      ]
+      
+      const elements = document.querySelectorAll(selectors.join(','))
+      let addedCount = 0
+      let skippedCount = 0
+      
+      console.log(`🔄 DOM Monitor: Found ${elements.length} potential elements to re-cache`)
+      
+      for (const element of elements) {
+        try {
+          if (this.isRelevantElement(element)) {
+            const elementId = await this.addElement(element)
+            if (elementId) {
+              addedCount++
+            } else {
+              skippedCount++
+            }
+          } else {
+            skippedCount++
+          }
+        } catch (error) {
+          console.warn("DOM Monitor: Error during force refresh:", error)
+          skippedCount++
+        }
+      }
+      
+      const result = {
+        elementsFound: elements.length,
+        elementsAdded: addedCount,
+        elementsSkipped: skippedCount,
+        finalCacheSize: this.cache.elements.size,
+        classifications: this.getClassificationSummary()
+      }
+      
+      console.log(`✅ DOM Monitor: Force refresh complete - Added: ${addedCount}, Skipped: ${skippedCount}, Final cache size: ${this.cache.elements.size}`)
+      
+      return result
     }
 
     getAllElements(filter = {}) {
       const elements = []
       
-      for (const [elementId, data] of this.cache.entries()) {
+      for (const [elementId, data] of this.cache.elements.entries()) {
         // Apply filters
         if (filter.visible && !data.basicData.visibility) continue
         if (filter.interactable && !data.basicData.interactable) continue
@@ -1010,7 +1619,14 @@
     }
 
     clear() {
-      this.cache.clear()
+      // Clear main cache
+      this.cache.elements.clear()
+      
+      // Clear all classification indexes
+      Object.values(this.cache.classifications.byType).forEach(set => set.clear())
+      Object.values(this.cache.classifications.byAction).forEach(set => set.clear())
+      Object.values(this.cache.classifications.byContext).forEach(set => set.clear())
+      
       this.accessCount.clear()
       this.lastAccess.clear()
       this.textIndex.clear()
@@ -1025,8 +1641,17 @@
         cacheHits: 0,
         cacheMisses: 0,
         indexUpdates: 0,
-        lastCleanup: Date.now()
+        lastCleanup: Date.now(),
+        classifications: {
+          clickable: 0,
+          typeable: 0,
+          navigation: 0,
+          form: 0,
+          media: 0
+        }
       }
+      
+      console.log("🧹 DOM Monitor: Cache completely cleared and reset")
     }
 
     // NEW: helper to detect debug mode

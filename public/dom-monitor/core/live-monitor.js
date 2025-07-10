@@ -28,6 +28,7 @@
       // State management
       this.isInitialized = false
       this.isRunning = false
+      this.isPerformingCleanup = false // ADDED: Prevent cleanup loops
       this.initializationPromise = null
       this.stats = {
         startTime: Date.now(),
@@ -268,6 +269,43 @@
       }
     }
 
+    // Stop monitoring
+    stopMonitoring() {
+      try {
+        console.log("DOM Monitor: Stopping monitoring services...")
+        
+        // Stop DOM observation
+        if (this.domObserver) {
+          this.domObserver.stopObserving()
+        }
+        
+        // Stop enhancement modules
+        if (this.scrollDetector) {
+          this.scrollDetector.stopDetecting()
+        }
+        
+        if (this.mediaDetector) {
+          this.mediaDetector.stopDetecting()
+        }
+        
+        if (this.hoverDetector) {
+          this.hoverDetector.stopDetecting()
+        }
+        
+        // Clear periodic cleanup
+        this.stopPeriodicCleanup()
+        
+        this.isRunning = false
+        
+        console.log("✅ DOM Monitor: All monitoring services stopped")
+        
+        this.broadcastStatus('stopped')
+        
+      } catch (error) {
+        console.error("❌ DOM Monitor: Error stopping monitoring:", error)
+      }
+    }
+
     // NEW: Perform initial element scan to populate cache
     async performInitialElementScan() {
       if (!this.elementCache) {
@@ -352,45 +390,20 @@
       }
     }
 
-    // Stop monitoring
-    stopMonitoring() {
-      try {
-        // Stop DOM observation
-        if (this.domObserver) {
-          this.domObserver.stopObserving()
-        }
-        
-        // Stop enhancement modules
-        if (this.scrollDetector) {
-          this.scrollDetector.stopDetecting()
-        }
-        
-        if (this.mediaDetector) {
-          this.mediaDetector.stopDetecting()
-        }
-        
-        if (this.hoverDetector) {
-          this.hoverDetector.stopDetecting()
-        }
-        
-        // Clear periodic cleanup
-        this.stopPeriodicCleanup()
-        
-        this.isRunning = false
-        
-        console.log("✅ DOM Monitor: All monitoring services stopped")
-        
-        this.broadcastStatus('stopped')
-        
-      } catch (error) {
-        console.error("❌ DOM Monitor: Error stopping monitoring:", error)
-      }
-    }
-
     // Periodic cleanup
     startPeriodicCleanup() {
+      // FIXED: Prevent multiple cleanup intervals
+      if (this.cleanupInterval) {
+        clearInterval(this.cleanupInterval)
+      }
+      
       this.cleanupInterval = setInterval(() => {
-        this.performCleanup()
+        // FIXED: Only perform cleanup if we're still running and initialized
+        if (this.isRunning && this.isInitialized) {
+          this.performCleanup()
+        } else {
+          console.log("DOM Monitor: Skipping cleanup - not running or not initialized")
+        }
       }, 30000) // Every 30 seconds
     }
 
@@ -398,34 +411,38 @@
       if (this.cleanupInterval) {
         clearInterval(this.cleanupInterval)
         this.cleanupInterval = null
+        console.log("DOM Monitor: Periodic cleanup stopped")
       }
     }
 
     async performCleanup() {
+      // FIXED: Add protection against cleanup loops
+      if (this.isPerformingCleanup) {
+        console.log("DOM Monitor: Cleanup already in progress, skipping")
+        return
+      }
+      
+      this.isPerformingCleanup = true
+      
       try {
-        // Clean up element cache
+        // Clean up element cache with improved logic
         if (this.elementCache) {
           const cacheResult = this.elementCache.cleanup()
-          if (this.config.debugMode) {
+          if (this.config.debugMode && !cacheResult.skipped) {
             console.log("DOM Monitor: Cache cleanup:", cacheResult)
           }
         }
         
-        // Clean up performance manager
-        if (this.performanceManager) {
-          this.performanceManager.cleanup()
-        }
-        
-        // Clean up communication bridge
-        if (this.communicationBridge) {
-          this.communicationBridge.cleanup()
-        }
+        // REMOVED: Don't clean up performance manager and communication bridge during normal cleanup
+        // These should only be cleaned up during shutdown
         
         // Update memory usage stats
         this.updateMemoryStats()
         
       } catch (error) {
         console.warn("DOM Monitor: Error during cleanup:", error)
+      } finally {
+        this.isPerformingCleanup = false
       }
     }
 
@@ -442,7 +459,7 @@
       const startTime = performance.now()
       
       try {
-        console.log(`📊 DOM Monitor: Cache status - Total elements: ${this.elementCache?.cache?.size || 0}`)
+        console.log(`📊 DOM Monitor: Cache status - Total elements: ${this.elementCache?.cache?.elements?.size || 0}`)
         
         const result = await this.elementCache.findByIntent(intent, options)
         
@@ -507,6 +524,65 @@
       } catch (error) {
         console.error("DOM Monitor: Error during force rescan:", error)
         throw error
+      }
+    }
+
+    // Public API Methods for testing and debugging
+
+    async verifyCache() {
+      console.log("🔍 DOM Monitor: Cache verification requested via API")
+      
+      if (!this.isInitialized || !this.elementCache) {
+        throw new Error("DOM Monitor not initialized")
+      }
+      
+      return this.elementCache.verifyAndCleanCache()
+    }
+
+    async refreshCache() {
+      console.log("🔄 DOM Monitor: Cache refresh requested via API")
+      
+      if (!this.isInitialized || !this.elementCache) {
+        throw new Error("DOM Monitor not initialized")
+      }
+      
+      return await this.elementCache.forceRefresh()
+    }
+
+    async getCacheDebugInfo() {
+      console.log("🐛 DOM Monitor: Debug info requested via API")
+      
+      if (!this.isInitialized || !this.elementCache) {
+        throw new Error("DOM Monitor not initialized")
+      }
+      
+      const cacheStats = this.elementCache.getStats()
+      const classificationSummary = this.elementCache.getClassificationSummary()
+      
+      // Sample some cached elements for debugging
+      const sampleElements = []
+      let count = 0
+      for (const [elementId, data] of this.elementCache.cache.elements.entries()) {
+        if (count >= 5) break
+        
+        sampleElements.push({
+          elementId,
+          tag: data.basicData.tagName,
+          text: data.basicData.text?.slice(0, 50) || '',
+          className: data.basicData.attributes?.className || '',
+          inDOM: document.contains(data.element),
+          visible: data.basicData.visibility,
+          interactable: data.basicData.interactable
+        })
+        count++
+      }
+      
+      return {
+        cacheStats,
+        classificationSummary,
+        sampleElements,
+        totalCacheSize: this.elementCache.cache.elements.size,
+        timestamp: Date.now()
       }
     }
 
@@ -699,12 +775,12 @@
       try {
         console.log("🔄 DOM Monitor: Shutting down...")
         
-        // Stop monitoring
+        // Stop monitoring first
         this.stopMonitoring()
         
-        // Clean up all modules
+        // FIXED: Clean up all modules properly during shutdown only
         if (this.elementCache) {
-          this.elementCache.clear()
+          this.elementCache.clear() // Complete clear during shutdown
         }
         
         if (this.communicationBridge) {
@@ -718,6 +794,7 @@
         // Reset state
         this.isInitialized = false
         this.isRunning = false
+        this.isPerformingCleanup = false
         this.initializationPromise = null
         
         console.log("✅ DOM Monitor: Shutdown complete")
